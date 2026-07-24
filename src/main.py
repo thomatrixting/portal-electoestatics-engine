@@ -34,53 +34,16 @@ def equipotencials_closeportals_falling():
     #sim = close_portals_scene(solver='sor', distance_portals=120)
     #sim = close_portals_scene(solver='sor', distance_portals=80)
     #sim = close_portals_scene(solver='sor', distance_portals=40)
-    sim = close_portals_scene(solver='mom', distance_portals=0)
+    #sim = close_portals_scene(solver='mom', distance_portals=0)
     #sim = falling_object_scene(solver='sor',pinned=True)
-    sim.run()
-    sim = falling_object_scene(solver='mom',pinned=True)
+    #sim = falling_object_scene(solver='mom',pinned=True)
+    sim = falling_object_scene(solver='sor',pinned=True)
     sim.run()
 
 
 def main() -> None:
-    sim = equipotencials_closeportals_falling()
-    
-    # sim = equipotential_scene(solver='mom')
-    # sim = faling_object_scene()
-    # sim = vertical_portals_many_objects_scene()
-    # sim = test_portals_scene()  
-    # sim = example_mom_carga_entre_portales()
-    # sim = example_mom_cargas_afuera()
-    # sim = example_mom_couple()
-    # sim = example_mom()
-    # sim = test_portals_scene()
-    # sim = test_gradient()
-    # sim = example_portal_on_capacitor()
-    # sim = example_couple_portals()  # Starting scene
-    # sim = triple_portals()
-    # sim = axiom_continuity_sor()
-    # sim = axiom_continuity_mom()
-    #sim = triple_portals_mom()
-    #sim.run()
-    #sim = triple_portals_sor()
-    #sim.run()
-    #sim = flux_zero_test_scene('mom')
-    #sim.run()
-    #sim = flux_zero_test_scene('sor')
-    #sim.run()
-    #sim = triple_portal_flux_probes_scene('mom')
-    #sim.run()
-    #sim = triple_portal_flux_probes_scene('sor')
-    #sim.run()
-    #sim = falling_flux_scene('sor')
-    #sim.run()
-    #sim = falling_flux_scene('mom')
-    #sim.run()
-    #sim = object_at_portal_scene('sor')
-    #sim.run()    
-    #sim = object_at_portal_scene('mom')
-    #sim.run()
-
-    sim.run()
+    equipotencials_closeportals_falling()
+    #TODO organize scenes when everyone uploads them
 
 
 if __name__ == "__main__":

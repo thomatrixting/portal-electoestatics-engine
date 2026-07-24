@@ -609,6 +609,29 @@ def plot_velocities_comparison(show: bool = True):
     return fig
 
 
+def plot_oscillating_object_field(show: bool = True):
+    """Figura independiente: campo potencial de la escena del objeto
+    oscilante (conductor cargado oscilando entre los portales, MOM)."""
+    base = Path("/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/oscilatiing_object")
+    ax = plot_field(base / "snapshot_mom_oscilationg.npz", show=show,
+                    scheme="Extra", show_isolines=False, show_vectors=True, field="gradient",
+                    title="Gradiente del campo - objeto oscilante (MOM)",
+                    save_path=str(_FINAL_PLOTS_DIR / "campo_objeto_oscilante.png"))
+    return ax
+
+
+def plot_oscillating_object_trajectory(show: bool = True):
+    """Figura independiente: trayectoria del conductor oscilante sobre el
+    campo potencial de fondo (MOM)."""
+    base = Path("/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/oscilatiing_object")
+    ax = plot_trajectories(base / "recording_mom_oscilationg.npz", every_n_frames=20,
+                           scheme="Extra", show_isolines=True, show_vectors=True,
+                           title="Trayectoria del objeto oscilante (MOM)",
+                           save_path=str(_FINAL_PLOTS_DIR / "trayectoria_objeto_oscilante.png"),
+                           show=show)
+    return ax
+
+
 def plot_equipotencial_scene(show = True):
 
     #SOR 800x400 objects
@@ -641,6 +664,8 @@ def plot_equipotencial_scene(show = True):
     plot_equipotencial_field_mom(show=show)
     plot_equipotencial_field_sor(show=show)
     plot_velocities_comparison(show=show)
+    plot_oscillating_object_field(show=show)
+    plot_oscillating_object_trajectory(show=show)
 
 def _flux_from_mask(mask: np.ndarray, grad_x: np.ndarray, grad_y: np.ndarray,
                      portals_mask: np.ndarray) -> float:

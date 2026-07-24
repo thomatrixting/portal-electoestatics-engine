@@ -13,8 +13,8 @@ def _anchors(sim_width, sim_height, extend=False):
     """Special preset with potential """
 
     if extend:
-        sim_min_width = -sim_width * 0.25
-        sim_max_width = sim_width * 1.25
+        sim_min_width = -sim_width 
+        sim_max_width = sim_width * 2
     else:
         sim_min_width = 0
         sim_max_width = sim_width
@@ -31,6 +31,37 @@ def _null_anchors(sim_width, sim_height):
     ]
 
 #scenes
+
+def capacitor_scene() -> Simulation:
+    """one paralel portals between a capacitor that would be the roof, to another portal far away from the other portal"""
+    W,H = 400,200
+    px_sclae = 3
+
+    cap_length = H/2
+    portal_lenght= H/4
+
+    cap_delta_with_top = (H - cap_length)/2
+    portal_delta_with_top = (H - portal_lenght)/2
+
+    #define the capacitor
+    capacitor = [
+        PotentialAnchor(RectangleMask(W/8,W/8,cap_delta_with_top,cap_delta_with_top + cap_length),1.0,),
+        PotentialAnchor(RectangleMask(3*W/8,W/8,cap_delta_with_top,cap_delta_with_top + cap_length),0)
+    ]
+
+    p1 = Portal(RectangleMask(W/4, W/4, portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(255, 153, 0),facing_positive=False)
+    p2 = Portal(RectangleMask(3*W/4, 3*W/4, portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(0, 204, 255),facing_positive=False)
+
+    return Simulation(
+        *capacitor, CouplePortal(p1,p2),
+        sim_width=W, sim_height=H,
+        px_scale=px_sclae,
+        iterations_per_frame=2000,
+        sor_omega=1.7,
+        isoline_count=50,
+        solver_mode="mom"
+    )
+
 
 def equipotential_scene(solver='sor',pinned=True,distance_portals=120) -> Simulation:
     """A scene with a couple of portals and a material object"""
@@ -95,7 +126,7 @@ def close_portals_scene(solver='sor',pinned=True,distance_portals=120) -> Simula
     p2 = Portal(RectangleMask(px-portals_width-shift, px+portals_width-shift, cy+apart_d, cy+apart_d+1), (0, 0, 255), facing_positive=False)
     
     return Simulation(
-        *_anchors(W, H, extend=True), CouplePortal(p1, p2), 
+        *_anchors(W, H), CouplePortal(p1, p2), 
         sim_width=W, sim_height=H,
         px_scale=2, 
         iterations_per_frame=500,
@@ -105,7 +136,7 @@ def close_portals_scene(solver='sor',pinned=True,distance_portals=120) -> Simula
         show_vectors=True,
         show_isolines=True,
         color_mapper=extra_mapper(),
-        mom_images=True
+        mom_images=False,
     )
 
 def falling_object_scene(solver='sor',pinned=True) -> Simulation:
@@ -113,10 +144,11 @@ def falling_object_scene(solver='sor',pinned=True) -> Simulation:
     W, H = 500,500
     cx = W // 2
     cy = H // 2
-    d = 100
+    d = 150
+    h_p = 50
     r = 10
-    p1 = Portal(RectangleMask(cx-d,cx+d,d,d), (255, 0, 0), facing_positive=True)
-    p2 = Portal(RectangleMask(cx-d,cx+d, H-d, H-d), (0, 0, 255), facing_positive=False)
+    p1 = Portal(RectangleMask(cx-d,cx+d,h_p,h_p), (255, 0, 0), facing_positive=True)
+    p2 = Portal(RectangleMask(cx-d,cx+d, H-h_p, H-h_p), (0, 0, 255), facing_positive=False)
 
     obs = MaterialObject(RectangleMask(cx-r, cx+r, cy-r, cy+r),
                          color=(80, 220, 120), pinned=pinned, label="Conductor",active=True,
@@ -133,7 +165,8 @@ def falling_object_scene(solver='sor',pinned=True) -> Simulation:
         solver_mode=solver,
         show_vectors=True,
         show_isolines=True,
-        color_mapper=extra_mapper()
+        color_mapper=extra_mapper(),
+        mom_images=True
     )
 
 #testing
