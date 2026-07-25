@@ -36,10 +36,11 @@ def equipotencials_closeportals_falling():
     #sim = close_portals_scene(solver='sor', distance_portals=40)
     #sim = close_portals_scene(solver='mom', distance_portals=0)
     #sim = falling_object_scene(solver='sor',pinned=True)
-    sim = falling_object_scene(solver='mom',pinned=True)
+    sim = falling_object_scene(solver='mom',pinned=False)
     #sim = falling_object_scene(solver='sor',pinned=True)
     #sim = capacitor_scene()
     #sim = capacitor_scene_corrected()
+    sim.run()
 
 def main() -> None:
     equipotencials_closeportals_falling()
@@ -61,10 +62,10 @@ def main() -> None:
     # sim = example_portal_on_capacitor()
     #sim = example_couple_portals()  # Starting scene
     #sim = triple_portals()
-    sim = axiom_continuity_sor()
+    #sim = axiom_continuity_sor()
     # sim = axiom_continuity_mom()
 
-    sim.run()
+    #sim.run()
 
 
 if __name__ == "__main__":
