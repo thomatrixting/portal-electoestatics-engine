@@ -707,55 +707,10 @@ def example_mom_cargas_afuera() -> Simulation:
         show_isolines=True,
     )
 
-def axiom_continuity_sor() -> Simulation:
+def axiom_continuity(solver) -> Simulation:
     """
-    Axiom: potential continuity across portal boundaries (SOR solver).
-    """
-    W, H = 200, 200
-    cy = H // 2
-    portal_w = W // 2
-    portal_x0 = (W - portal_w) // 2
-    portal_x1 = portal_x0 + portal_w
-    gap = 20
-
-    top_anchor    = PotentialAnchor(RectangleMask(0, W, 0, 1),     1.0)
-    bottom_anchor = PotentialAnchor(RectangleMask(0, W, H-1, H),   0.0)
-
-    p1 = Portal(
-        RectangleMask(portal_x0, portal_x1, cy - gap, cy - gap),
-        color=(255, 153, 0),
-        facing_positive=False,
-        normal_axis="y", back_depth=5
-    )
-    p2 = Portal(
-        RectangleMask(portal_x0, portal_x1, cy + gap, cy + gap),
-        color=(0, 204, 255),
-        facing_positive=True,
-        normal_axis="y", back_depth=5
-    )
-
-    sim = Simulation(
-        top_anchor, bottom_anchor, CouplePortal(p2, p1),
-        sim_width=W, sim_height=H,
-        px_scale=3,
-        solver_mode="sor",
-        iterations_per_frame=500,
-        sor_omega=1.85,
-        show_isolines=True,
-        isoline_count=20,
-    )
-    sim.test_charges.append(
-        TestCharge(x=float(W // 2), y=20.0,   
-                   vx=0.0, vy=0.0,
-                   charge=0.20, mass=10.0,
-                   color=(255, 255, 0),
-                   trail_len=800)
-    )
-    return sim
-
-def axiom_continuity_mom() -> Simulation:
-    """
-    Axiom: potential continuity across portal boundaries (SOR solver).
+    Axiom: potential continuity across portal boundaries.
+    solver (str): sor/mom
     """
     W, H = 200, 200
     cy = H // 2
@@ -784,7 +739,7 @@ def axiom_continuity_mom() -> Simulation:
         top_anchor, bottom_anchor, CouplePortal(p2, p1),
         sim_width=W, sim_height=H,
         px_scale=3,
-        solver_mode="mom",
+        solver_mode=solver,
         iterations_per_frame=500,
         sor_omega=1.85,
         show_isolines=True,

@@ -521,6 +521,23 @@ from scenes import my_scene
 def main():
     my_scene().run()
 ```
+### Continuity Axiom Scenes
+
+```python
+def axiom_continuity(solver) -> Simulation:
+```
+
+The scene verifies the **potential continuity axiom** across portal boundaries
+using both numerical solvers. A uniform background field (analogous to a
+parallel-plate capacitor) is established between two horizontal
+`PotentialAnchor` objects, with a `CouplePortal` pair placed perpendicular
+to the field. A `TestCharge` is released from rest and accelerates through
+both portal mouths while its trajectory and velocity are recorded.
+
+Neither solver produces a discontinuity in the electric potential at the portal boundaries — equipotential lines cross both mouths smoothly, and the test charge's velocity evolves continuously through the
+teleportation event. This confirms that `CouplePortal` correctly enforces
+the continuity on the boundaries regardless of the solver used. Quantitative differences between SOR and MOM are observed in the lateral field uniformity but not in the continuity condition itself.
+
 
 ### Recipes
 

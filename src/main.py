@@ -46,11 +46,11 @@ def equipotenciales_primera_configuracion(solver='mom', distance_portals=80) -> 
     sim.run()
 
 
-def equipotenciales_segunda_configuracion(solver='mom') -> None:
+def equipotenciales_segunda_configuracion(solver) -> None:
     """4.1.2 Segunda configuración: portales enfrentados en y=80 y y=120
     con una carga de prueba que se teletransporta (figuras potential_MOM,
     potential_SOR, vel_sor, vel_MoM)."""
-    sim = axiom_continuity_mom() if solver == 'mom' else axiom_continuity_sor()
+    sim = axiom_continuity(solver='mom') if solver == 'mom' else axiom_continuity(solver='sor')
     sim.run()
 
 
@@ -84,13 +84,12 @@ def discontinuidad_capacitor(corrected=False) -> None:
     sim = capacitor_scene_corrected() if corrected else capacitor_scene()
     sim.run()
 
-
 def main() -> None:
-    equipotenciales_primera_configuracion(solver='mom', distance_portals=80)
-    #equipotenciales_segunda_configuracion(solver='mom')
-    #conservacion_velocidad(solver='mom')
-    #objeto_oscilante(solver='mom')
-    #discontinuidad_capacitor(corrected=False)
+    # equipotenciales_primera_configuracion(solver='mom', distance_portals=80)
+    equipotenciales_segunda_configuracion(solver='mom')
+    # conservacion_velocidad(solver='mom')
+    # objeto_oscilante(solver='mom')
+    # discontinuidad_capacitor(corrected=False)
 
 
 if __name__ == "__main__":
