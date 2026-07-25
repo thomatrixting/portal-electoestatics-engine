@@ -30,6 +30,7 @@ from typing import Optional, Tuple
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from colors import COLOR_SCHEMES
 
@@ -44,6 +45,9 @@ _VECTOR_COLOR = (60 / 255, 60 / 255, 70 / 255)   # matches simulation.py:_render
 _ISOLINE_ALPHA = 80 / 255                        # matches simulation.py:_render_isolines
 _FILL_ALPHA = 210 / 255                          # matches simulation.py:_build_portal_render_cache
 _ARROW_LEN = 6.0                                 # grid units, matches _render_portal_arrows
+
+_FINAL_PLOTS_DIR = Path("/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/final_plots")
+_FINAL_PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _load(path) -> Tuple[np.lib.npyio.NpzFile, dict]:
@@ -80,6 +84,20 @@ def _draw_vectors(ax, grad_x: np.ndarray, grad_y: np.ndarray, step: int, magnitu
     ax.quiver(xs_grid, ys_grid, gx, gy, color=[_VECTOR_COLOR], angles="xy", scale=magnitude)
 
 
+def _wire_format_coord(ax, arr: np.ndarray, field: str) -> None:
+    """Cursor readout shows the underlying scalar field value, not the
+    color-mapped RGB triplet imshow would report by default."""
+    H, W = arr.shape
+
+    def format_coord(x: float, y: float) -> str:
+        ix, iy = int(round(x)), int(round(y))
+        if 0 <= iy < H and 0 <= ix < W:
+            return f"x={x:.1f} y={y:.1f} {field}={arr[iy, ix]:.4f}"
+        return f"x={x:.1f} y={y:.1f}"
+
+    ax.format_coord = format_coord
+
+
 def _render_background(ax, data, field: str, scheme: str,
                        show_isolines: bool, isoline_count: int,
                        show_vectors: bool, vector_step: int) -> np.ndarray:
@@ -89,6 +107,7 @@ def _render_background(ax, data, field: str, scheme: str,
     arr = data[_FIELD_KEYS[field]]
     rgb = _field_rgb(arr, scheme)
     ax.imshow(rgb, origin="upper")
+    _wire_format_coord(ax, arr, field)
 
     if show_isolines:
         _draw_isolines(ax, arr, isoline_count)
@@ -176,7 +195,9 @@ def _draw_pinned_objects(ax, data, meta, background_rgb: np.ndarray) -> None:
 def plot_field(path, field: str = "potential", scheme: str = "Default",
               ax=None, show: bool = True,
               show_isolines: bool = True, isoline_count: int = 10,
-              show_vectors: bool = False, vector_step: int = 10):
+              show_vectors: bool = False, vector_step: int = 10,
+              title: Optional[str] = None, xlabel: Optional[str] = None,
+              save_path: Optional[str] = None):
     """
     Plots a scalar field from a snapshot or recording export, matching the
     live simulation's rendering: real color ramp, equipotential lines,
@@ -195,6 +216,9 @@ def plot_field(path, field: str = "potential", scheme: str = "Default",
         show_isolines: draw equipotential lines (matches Simulation's
                        isoline overlay).
         show_vectors:  draw the (-grad_x, -grad_y) vector field.
+        title:         custom plot title (defaults to an auto-generated one).
+        xlabel:        custom x-axis label (defaults to "x (grid)").
+        save_path:     if given, save the figure to this path.
     """
     data, meta = _load(path)
 
@@ -207,9 +231,12 @@ def plot_field(path, field: str = "potential", scheme: str = "Default",
                              show_vectors, vector_step)
     _draw_pinned_objects(ax, data, meta, rgb)
 
-    ax.set_title(f"{field} ({scheme}) - {meta.get('kind', '?')} @ {meta.get('timestamp', '?')}")
-    ax.set_xlabel("x (grid)")
+    ax.set_title(title or f"{field} ({scheme}) - {meta.get('kind', '?')} @ {meta.get('timestamp', '?')}")
+    ax.set_xlabel(xlabel or "x (grid)")
     ax.set_ylabel("y (grid)")
+
+    if save_path is not None:
+        ax.figure.savefig(save_path, dpi=150, bbox_inches="tight")
 
     if created and show:
         plt.show()
@@ -220,7 +247,9 @@ def plot_trajectories(recording_path, every_n_frames: int = 5,
                       field: str = "potential", scheme: str = "Default",
                       show_isolines: bool = True, isoline_count: int = 10,
                       show_vectors: bool = False, vector_step: int = 10,
-                      ax=None, show: bool = True, cmap: str = "plasma"):
+                      ax=None, show: bool = True, cmap: str = "plasma",
+                      title: Optional[str] = None, xlabel: Optional[str] = None,
+                      save_path: Optional[str] = None):
     """
     Plots the recorded MaterialObject mask outlines and TestCharge positions
     sampled every `every_n_frames` frames, colored by a hue gradient that
@@ -237,6 +266,9 @@ def plot_trajectories(recording_path, every_n_frames: int = 5,
         ax:              existing matplotlib Axes to draw into.
         show:            call plt.show() when a new figure was created.
         cmap:            matplotlib colormap name for the time-progression hue.
+        title:           custom plot title (defaults to an auto-generated one).
+        xlabel:          custom x-axis label (defaults to "x (grid)").
+        save_path:       if given, save the figure to this path.
     """
     data, meta = _load(recording_path)
     if meta.get("kind") != "recording":
@@ -277,11 +309,16 @@ def plot_trajectories(recording_path, every_n_frames: int = 5,
 
     norm = plt.Normalize(vmin=0, vmax=max(frame_count - 1, 1))
     sm = plt.cm.ScalarMappable(cmap=colormap, norm=norm)
-    plt.colorbar(sm, ax=ax, label="frame index (time)")
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="4%", pad=0.15)
+    plt.colorbar(sm, cax=cax, label="frame index (time)")
 
-    ax.set_title(f"Trajectories ({field}, {scheme}) - recording @ {meta.get('timestamp', '?')}")
-    ax.set_xlabel("x (grid)")
+    ax.set_title(title or f"Trajectories ({field}, {scheme}) - recording @ {meta.get('timestamp', '?')}")
+    ax.set_xlabel(xlabel or "x (grid)")
     ax.set_ylabel("y (grid)")
+
+    if save_path is not None:
+        ax.figure.savefig(save_path, dpi=150, bbox_inches="tight")
 
     if created and show:
         plt.show()
@@ -334,10 +371,16 @@ def _contact_frames(portals_mask: Optional[np.ndarray],
     return contact
 
 
-def plot_velocities(recording_path, every_n_frames: int = 10, show: bool = True):
+_VELOCITY_TITLES = {"speed": "|v| - velocity magnitude", "vx": "vx", "vy": "vy"}
+
+
+def plot_velocities(recording_path, every_n_frames: int = 10, show: bool = True,
+                    components: Tuple[str, ...] = ("speed", "vx", "vy"),
+                    title: Optional[str] = None, xlabel: Optional[str] = None,
+                    save_path: Optional[str] = None):
     """
-    Plots velocity magnitude and its x/y components vs. frame index, as 3
-    subplots (|v|, vx, vy), each with one line per tracked object
+    Plots velocity magnitude and/or its x/y components vs. frame index, one
+    subplot per requested component, each with one line per tracked object
     (MaterialObject centroid or TestCharge position).
 
     No absolute dt is recorded, so velocity is a displacement (grid units /
@@ -351,10 +394,23 @@ def plot_velocities(recording_path, every_n_frames: int = 10, show: bool = True)
     stencil includes a neighboring sample that is) is dropped - contact
     with a portal is a teleport event, and the resulting centroid jump is
     not a real velocity.
+
+    Args:
+        components: which subplots to draw, e.g. ("speed",) for just |v|,
+                    or any subset/order of "speed", "vx", "vy".
+        title:      if given, set as an overall figure suptitle (in addition
+                    to the per-component subplot titles).
+        xlabel:     custom x-axis label for the bottom subplot (defaults to
+                    "frame").
+        save_path:  if given, save the figure to this path.
     """
     data, meta = _load(recording_path)
     if meta.get("kind") != "recording":
         raise ValueError("plot_velocities expects a recording_*.npz/.json file")
+
+    unknown = set(components) - set(_VELOCITY_TITLES)
+    if unknown:
+        raise ValueError(f"unknown component(s) {unknown}, expected subset of {list(_VELOCITY_TITLES)}")
 
     portals_mask = _portal_mask_union(data, meta)
 
@@ -369,9 +425,75 @@ def plot_velocities(recording_path, every_n_frames: int = 10, show: bool = True)
         contact = _contact_frames(portals_mask, positions=pos)
         objects.append((f"TestCharge {q_meta['index']}", pos, contact))
 
-    fig, axes = plt.subplots(3, 1, figsize=(9, 9), sharex=True)
+    fig, axes = plt.subplots(len(components), 1, figsize=(9, 3 * len(components)),
+                             sharex=True, squeeze=False)
+    axes = axes[:, 0]
     stride = max(1, every_n_frames)
 
+    for label, pos, contact in objects:
+        n = len(pos)
+        idxs = list(range(0, n, stride))
+        if idxs[-1] != n - 1:
+            idxs.append(n - 1)
+        frames = np.asarray(idxs, dtype=float)
+        sampled = pos[idxs]
+
+        vx = np.gradient(sampled[:, 0], frames)
+        vy = np.gradient(sampled[:, 1], frames)
+        speed = np.hypot(vx, vy)
+        values = {"speed": speed, "vx": vx, "vy": vy}
+
+        if contact is not None:
+            contact_sampled = contact[idxs]
+            bad = contact_sampled.copy()
+            bad[:-1] |= contact_sampled[1:]
+            bad[1:] |= contact_sampled[:-1]
+            for arr in values.values():
+                arr[bad] = np.nan
+
+        for component, ax in zip(components, axes):
+            ax.plot(frames, values[component], label=label)
+
+    for component, ax in zip(components, axes):
+        ax.set_title(_VELOCITY_TITLES[component])
+        ax.set_ylabel("velocity (grid units / frame)")
+        ax.legend()
+        ax.grid(True)
+
+    axes[-1].set_xlabel(xlabel or "frame")
+
+    if title:
+        fig.suptitle(title)
+
+    plt.tight_layout()
+
+    if save_path is not None:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+
+    if show:
+        plt.show()
+    return axes
+
+
+def _plot_speed_into_ax(ax, recording_path, every_n_frames: int = 50) -> None:
+    """Adapts plot_velocities' speed-only computation to draw into an
+    externally-provided Axes (plot_velocities always builds its own figure,
+    so this is used when several recordings need to share one figure)."""
+    data, meta = _load(recording_path)
+    portals_mask = _portal_mask_union(data, meta)
+
+    objects = []
+    for obj_meta in meta.get("material_objects", []):
+        stack = data[obj_meta["array_key"]]
+        pos = _centroid_trajectory(stack)
+        contact = _contact_frames(portals_mask, mask_stack=stack)
+        objects.append((obj_meta.get("label") or f"MaterialObject {obj_meta['index']}", pos, contact))
+    for q_meta in meta.get("test_charges", []):
+        pos = data[q_meta["array_key"]]
+        contact = _contact_frames(portals_mask, positions=pos)
+        objects.append((f"TestCharge {q_meta['index']}", pos, contact))
+
+    stride = max(1, every_n_frames)
     for label, pos, contact in objects:
         n = len(pos)
         idxs = list(range(0, n, stride))
@@ -389,34 +511,137 @@ def plot_velocities(recording_path, every_n_frames: int = 10, show: bool = True)
             bad = contact_sampled.copy()
             bad[:-1] |= contact_sampled[1:]
             bad[1:] |= contact_sampled[:-1]
-            vx[bad] = np.nan
-            vy[bad] = np.nan
             speed[bad] = np.nan
 
-        axes[0].plot(frames, speed, label=label)
-        axes[1].plot(frames, vx, label=label)
-        axes[2].plot(frames, vy, label=label)
+        ax.plot(frames, speed, label=label)
 
-    axes[0].set_title("|v| - velocity magnitude")
-    axes[1].set_title("vx")
-    axes[2].set_title("vy")
-    axes[2].set_xlabel("frame")
-    for ax in axes:
-        ax.set_ylabel("velocity (grid units / frame)")
-        ax.legend()
-        ax.grid(True)
+    ax.set_ylabel("velocidad (unidades de grilla / frame)")
+    ax.set_xlabel("frame")
+    ax.legend()
+    ax.grid(True)
 
-    plt.tight_layout()
+
+def _plot_distance_grid(entries, base: Path, suptitle: str, save_name: str, show: bool):
+    fig, axes = plt.subplots(2, 2, figsize=(12, 9), sharex=True, sharey=True)
+    for ax, (fname, vdist) in zip(axes.flat, entries):
+        plot_field(base / fname, ax=ax, show=False, scheme="Extra",
+                  show_isolines=True, show_vectors=True,
+                  title=f"d = {vdist}")
+
+    fig.suptitle(suptitle, fontsize=18, fontweight="bold")
+    fig.subplots_adjust(left=0.05, right=0.98, top=0.90, bottom=0.06,
+                        wspace=0.05, hspace=0.15)
+    fig.savefig(str(_FINAL_PLOTS_DIR / save_name), dpi=150, bbox_inches="tight")
+
     if show:
         plt.show()
-    return axes
+    return fig
+
+
+def plot_close_portals_scene(show: bool = True):
+    """Dos figuras de 2x2 subgraficas (ejes x/y compartidos): campo
+    potencial para las distintas distancias VERTICALES entre portales
+    guardadas en output/close_portals/ (0, 40, 80, 120), una para MOM y
+    otra para SOR."""
+    base = Path("/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/close_portals")
+
+    mom_entries = [
+        ("snapshot_mom_0d_close.npz", 0),
+        ("snapshot_mom_40d_close.npz", 40),
+        ("snapshot_mom_80d_close.npz", 80),
+        ("snapshot_mom_120d_close.npz", 120),
+    ]
+    fig_mom = _plot_distance_grid(
+        mom_entries, base,
+        "Campo potencial (MOM) para distintas distancias verticales entre portales",
+        "campo_por_distancia_mom.png", show)
+
+    sor_entries = [
+        ("snapshot_sor_0d.npz", 0),
+        ("snapshot_sor_40d_close.npz", 40),
+        ("snapshot_sor_80d_close.npz", 80),
+        ("snapshot_sor_120d_close.npz", 120),
+    ]
+    fig_sor = _plot_distance_grid(
+        sor_entries, base,
+        "Campo potencial (SOR) para distintas distancias verticales entre portales",
+        "campo_por_distancia_sor.png", show)
+
+    return fig_mom, fig_sor
+
+
+def plot_equipotencial_field_mom(show: bool = True):
+    """Figura independiente: campo potencial equipotencial, MOM."""
+    base = Path("/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/equipotencials")
+    ax = plot_field(base / "snapshot_mom_800_400.npz", show=show,
+                    scheme="Extra", show_isolines=True, show_vectors=True,
+                    title="Campo equipotencial - MOM",
+                    save_path=str(_FINAL_PLOTS_DIR / "equipotential_field_mom.png"))
+    return ax
+
+
+def plot_equipotencial_field_sor(show: bool = True):
+    """Figura independiente: campo potencial equipotencial, SOR."""
+    base = Path("/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/equipotencials")
+    ax = plot_field(base / "snapshot_sor_800_400.npz", show=show,
+                    scheme="Extra", show_isolines=True, show_vectors=True,
+                    title="Campo equipotencial - SOR",
+                    save_path=str(_FINAL_PLOTS_DIR / "equipotential_field_sor.png"))
+    return ax
+
+
+def plot_velocities_comparison(show: bool = True):
+    """Grafica de 1x2 subgraficas: velocidad absoluta de los objetos
+    rastreados, MOM vs SOR, sobre la misma geometria (800x400)."""
+    base = Path("/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/equipotencials")
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
+    _plot_speed_into_ax(axes[0], base / "recording_mom_800_400.npz", every_n_frames=50)
+    axes[0].set_title("Velocidad absoluta - MOM")
+    _plot_speed_into_ax(axes[1], base / "recording_sor_800_400.npz", every_n_frames=50)
+    axes[1].set_title("Velocidad absoluta - SOR")
+    fig.suptitle("Comparación de velocidad absoluta: MOM vs SOR")
+    plt.tight_layout()
+    fig.savefig(str(_FINAL_PLOTS_DIR / "velocities_comparison.png"), dpi=150, bbox_inches="tight")
+
+    if show:
+        plt.show()
+    return fig
+
+
+def plot_equipotencial_scene(show = True):
+
+    #SOR 800x400 objects
+
+    snapshot_path = "/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/equipotencials/snapshot_sor_800_400.npz"
+    recording_path = "/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/equipotencials/recording_sor_800_400.npz"
+
+    safe_path = Path(snapshot_path)
+    # Comentado: ya generado, no queremos que se abra una ventana cada vez
+    # que se corre el archivo. Descomentar si se necesita regenerar.
+    # plot_field(snapshot_path, field="potential", scheme="Extra",
+    #           show_isolines=True, show_vectors=True, show=False,title="Equipotential field with portals and fixed potentials SOR",save_path=str(safe_path.with_name("equipotential_field_sor.png")))
+    # plot_trajectories(recording_path, every_n_frames=50, field="potential", show=False, scheme="Extra", show_isolines=True, title="Trajectories of tracked objects SOR", save_path=str(safe_path.with_name("trajectories_sor.png")))
+    # plot_velocities(recording_path, show=False,components=["speed"],every_n_frames=50, title="Velocities of tracked objects SOR", save_path=str(safe_path.with_name("velocities_sor.png")))
+
+    # MOM 800x400 objects
+    snapshot_path = "/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/equipotencials/snapshot_mom_800_400.npz"
+    recording_path = "/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/equipotencials/recording_mom_800_400.npz"
+
+    safe_path = Path(snapshot_path)
+
+    # Comentado por el mismo motivo que el bloque SOR de arriba.
+    # plot_field(snapshot_path, field="potential", scheme="Extra",
+    #           show_isolines=True, show_vectors=True, show=False,title="Equipotential field with portals and fixed potentials MOM",save_path=str(safe_path.with_name("equipotential_field_mom.png")))
+    # plot_trajectories(recording_path, every_n_frames=50, field="potential", show=False, scheme="Extra", show_isolines=True, title="Trajectories of tracked objects MOM", save_path=str(safe_path.with_name("trajectories_mom.png")))
+    # plot_velocities(recording_path, show=False,components=["speed"],every_n_frames=50, title="Velocities of tracked objects MOM", save_path=str(safe_path.with_name("velocities_mom.png")))
+
+    # Graficas finales (final_plots) - unicas que se muestran (show=True)
+    plot_close_portals_scene(show=show)
+    plot_equipotencial_field_mom(show=show)
+    plot_equipotencial_field_sor(show=show)
+    plot_velocities_comparison(show=show)
 
 
 if __name__ == "__main__":
-    snapshot_path = "/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/snapshot_20260722_233555.npz"
-    recording_path = "/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/recording_20260722_233555.npz"
-
-    plot_field(snapshot_path, field="potential", scheme="Default",
-              show_isolines=True, show_vectors=True, show=True)
-    plot_trajectories(recording_path, every_n_frames=10, field="potential", show=True)
-    plot_velocities(recording_path, show=True)
+    plot_equipotencial_scene(show=True)

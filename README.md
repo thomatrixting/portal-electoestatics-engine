@@ -6,12 +6,14 @@ The engine ships with a `pygame` UI for building and interacting with a scene: p
 
 This project was built for the final assignment of the Electrodynamics course at the National University of Colombia, taught by Ph.D. Juan Domingo Baena. The goal is to analyze how a hypothetical portal would affect electric potential, under a set of axioms detailed in `/explanation/report.pdf`.
 
+<img width="1240" height="990" alt="Image" src="https://github.com/user-attachments/assets/d882b51a-6deb-4f6d-aeba-995c29da66cd" />
 
 ## Table of Contents
 
 - [Quick Start](#quick-start)
 - [Methodology](#methodology)
 - [Physics](#physics)
+- [Results](#Results)
 - [Project Architecture](#project-architecture)
 - [Field Objects](#field-objects)
 - [Masks](#masks)
@@ -75,6 +77,13 @@ Two different ways of solving for the same field are available, and only one is 
 **SOR** is an iterative relaxation that re-evaluates the whole grid every step, so the field, and anything coupled to it, keeps updating as the simulation runs. Portal potential is handled by averaging each pair's pixels on every step.
 
 **MOM** (Method of Moments) discretizes the boundaries into segments and solves a single dense linear system for the potential once, at scene setup; the resulting field is never recomputed afterward. Portal pairs are instead assigned a shared, unknown potential that the linear system solves for directly. This makes MOM a poor fit for anything meant to update the field on the fly, such as a `ConductorObject`, whose potential is supposed to re-equalize to its neighbors every step: doing that correctly under MOM would mean re-solving the whole boundary system on every frame, which is too expensive to run in real time, so this update currently doesn't happen. Because of this, when MOM is active SOR does not run at all.
+
+#### MOM edge fringing
+
+MOM's boundary segments use the free-space log kernel and have no notion of the simulation box's side walls, unlike SOR, which imposes a Neumann (zero-flux) condition on the left/right edges. A Dirichlet segment that spans the full grid width, such as a top or bottom anchor, therefore curves near its two ends instead of staying flat, the fringing effect of a finite capacitor plate. Two independent ways to remove this are available, and can be combined:
+
+- **Method of images** — `Simulation(..., solver_mode="mom", mom_images=True)`. Mirrors every boundary segment's contribution across both vertical walls with same-sign (Neumann) images, reproducing SOR's side-wall condition directly in the solver. The reflection series is truncated to `n_images` reflections per wall (`MOMSolver2D.__init__`, default `1`); no unknowns are added to the linear system, only extra kernel evaluations per matrix entry. This is the only option for boundaries whose extent matters and can't be resized, such as portals or conductors.
+- **Oversized anchors** — a scene-authoring choice rather than a solver flag: build an anchor's mask wider than the visible grid, e.g. `RectangleMask(-2*W, 3*W, 0, 1)` instead of `RectangleMask(0, W, 0, 1)`, so its ends fringe far outside the rendered area. Cheaper to reason about and needs no code change, but only makes sense for anchors, since it adds more boundary segments to the MOM system (slower solve) and doesn't apply to objects whose visible extent is part of the scene.
 
 ### Boundary Conditions
 

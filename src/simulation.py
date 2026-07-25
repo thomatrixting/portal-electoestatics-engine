@@ -33,6 +33,7 @@ class Simulation:
                  sim_height: int,
                  px_scale: float,
                  solver_mode: str = "sor",
+                 mom_images: bool = False,
                  iterations_per_frame: int = 50,
                  diff_threshold: float = 1e-4,
                  view_mode: str = "potential",
@@ -79,6 +80,7 @@ class Simulation:
         self._bake_movable_masks()
 
         self.solver_mode = solver_mode
+        self.mom_images = mom_images
 
         self._engine = PhysicsEngine(
             sim_width, sim_height, self.field, sor_omega=self.sor_omega)
@@ -88,6 +90,7 @@ class Simulation:
         self.E_magnitude = self._engine.E_magnitude
 
         # MOM: se resuelve una sola vez en setup
+        self._mom_status = "sin resolver"
         if self.solver_mode == "mom":
             self._mom_setup()
 
@@ -137,13 +140,22 @@ class Simulation:
                 m1 = BoundaryMesh(obj.p1.mask, W, H, potential_value=0.0)
                 m2 = BoundaryMesh(obj.p2.mask, W, H, potential_value=0.0)
                 coupled_pairs.append((m1, m2))
+            elif isinstance(obj, MultiPortal):
+                # N portales comparten phi desconocido (grupo neutro)
+                group = [BoundaryMesh(p.mask, W, H, potential_value=0.0)
+                         for p in obj.args]
+                coupled_pairs.append(group)
             elif hasattr(obj, 'potential_value') and hasattr(obj, 'mask'):
                 meshes.append(BoundaryMesh(obj.mask, W, H, obj.potential_value))
 
         if not meshes and not coupled_pairs:
+            self._mom_status = "sin objetos con phi fijo"
             return
 
-        solver = MOMSolver2D(meshes, coupled_pairs)
+        solver = MOMSolver2D(
+            meshes, coupled_pairs,
+            image_walls=(0, W) if self.mom_images else None,
+        )
         solver.build_and_solve()
 
         xs = np.arange(W, dtype=float)
@@ -159,8 +171,19 @@ class Simulation:
         self._engine.compute_gradients()
         self.grad_x = self._engine.grad_x
         self.grad_y = self._engine.grad_y
-        self.E_magnitude = self._engine.E_magnitude
+        h = getattr(self._engine, "height", 1.0)
+        self.g_force = np.sqrt(self.grad_x ** 2 + self.grad_y ** 2) * h
         self.diff = 0.0
+
+        self._mom_status = f"OK ({solver.N} seg.)"
+        # El campo cambió: forzar redibujado de isolíneas y overlays
+        self._isolines_dirty = True
+        self._portal_render_dirty = True
+
+    def _recompute_mom(self) -> None:
+        """Callback del botón 'Recalcular MOM': vuelve a resolver el
+        sistema MOM tomando las posiciones actuales de cargas/portales."""
+        self._mom_setup()
 
     def update_physics(self) -> None:
         if self.solver_mode == "mom":
@@ -614,6 +637,8 @@ class Simulation:
         for obj in self.field:
             if not isinstance(obj, MaterialObject) or not obj.active:
                 continue
+            if not obj.show_flux:
+                continue
             mask = obj.get_mask(self.X, self.Y)
             if not np.any(mask):
                 continue
@@ -697,6 +722,7 @@ class Simulation:
             "sim_height": self.sim_height,
             "px_scale": self.px_scale,
             "solver_mode": self.solver_mode,
+            "mom_images": self.mom_images,
             "sor_omega": self.sor_omega,
             "iterations_per_frame": self.iterations_per_frame,
             "diff_threshold": self.diff_threshold,
@@ -1022,6 +1048,14 @@ class Simulation:
                              step=0.05, fmt="{:.2f}", min_val=1.0, max_val=1.99))
         panel.add(T, Divider(0, 0, 0))
 
+        if self.solver_mode == "mom":
+            panel.add(T, SectionHeader(0, 0, 0, "MOM"))
+            panel.add(T, Label(0, 0, 0, "Estado",
+                               value_fn=lambda: self._mom_status))
+            panel.add(T, Button(0, 0, 0, 28, "Recalcular MOM",
+                                callback=self._recompute_mom))
+            panel.add(T, Divider(0, 0, 0))
+
         panel.add(T, SectionHeader(0, 0, 0, "Export"))
         panel.add(T, Button(0, 0, 0, 26, "Save Snapshot",
                              callback=self._save_snapshot))
@@ -1319,6 +1353,9 @@ class Simulation:
                             callback=lambda o=obj: (
                                 setattr(o, "vx", 0.0),
                                 setattr(o, "vy", 0.0))))
+            w.append(Toggle(0, 0, 0, "Show flux (\u03a6)",
+                            getter=lambda o=obj: o.show_flux,
+                            setter=lambda v, o=obj: setattr(o, "show_flux", v)))
 
         # Mask (hidden for baked ArrayMask objects - there's no formula left
         # to expose numerically, only a pixel grid; reposition by dragging)

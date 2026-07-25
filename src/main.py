@@ -29,26 +29,39 @@ See README.md for details
 
 from scenes import *
 
-def main() -> None:
-    sim = equipotential_scene(solver='mom')
-    #sim = faling_object_scene()
+def equipotencials_closeportals_falling():
+    #sim = equipotential_scene(solver='sor')
+    #sim = close_portals_scene(solver='sor', distance_portals=120)
+    #sim = close_portals_scene(solver='sor', distance_portals=80)
+    #sim = close_portals_scene(solver='sor', distance_portals=40)
+    sim = close_portals_scene(solver='mom', distance_portals=0)
+    #sim = falling_object_scene(solver='sor',pinned=True)
+    sim.run()
+    sim = falling_object_scene(solver='mom',pinned=True)
+    sim.run()
 
-    #sim = vertical_portals_many_objects_scene()
-    #sim = test_portals_scene()  
-    #sim = example_mom_carga_entre_portales()
-    #sim.run()
-    #sim = example_mom_cargas_afuera()
-    #sim.run()
-    #sim = example_mom_couple()
-    #sim.run()
-    #sim = example_mom()
-    #sim = test_portals_scene()
-    #sim = test_gradient()
+
+def main() -> None:
+    sim = equipotencials_closeportals_falling()
+    
+    # sim = equipotential_scene(solver='mom')
+    # sim = faling_object_scene()
+
+    # sim = vertical_portals_many_objects_scene()
+    # sim = test_portals_scene()  
+    # sim = example_mom_carga_entre_portales()
+    # sim = example_mom_cargas_afuera()
+    # sim = example_mom_couple()
+    # sim = example_mom()
+    # sim = test_portals_scene()
+    # sim = test_gradient()
     # sim = example_portal_on_capacitor()
-    #sim = example_couple_portals()  # Starting scene
-    #sim = triple_portals()
+    # sim = example_couple_portals()  # Starting scene
+    # sim = triple_portals()
     # sim = axiom_continuity_sor()
     # sim = axiom_continuity_mom()
+
+    # sim = triple_portals_mom()
 
     sim.run()
 

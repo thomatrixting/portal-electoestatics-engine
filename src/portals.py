@@ -137,23 +137,23 @@ class CouplePortal:
         return f"CouplePortal(p1={self.p1!r}, p2={self.p2!r})"
 
 
-#@dataclass
+@dataclass
 class MultiPortal:
     """Several portals with the same potential"""
-    args: tuple[Portal]
+    args: tuple[Portal, ...]
 
     def get_combined_mask(self, X: "np.ndarray",
                           Y: "np.ndarray") -> "np.ndarray":
-        if not len(args):
-            return
+        if not len(self.args):
+            return np.zeros(X.shape, dtype=bool)
 
-        local_mask = p[0].get_mask(X, Y)
-        for p in args[1:]:
-            local_mask |= p.get_mask(x, Y)
+        local_mask = self.args[0].get_mask(X, Y)
+        for p in self.args[1:]:
+            local_mask |= p.get_mask(X, Y)
         return local_mask
 
     def __repr__(self) -> str:
-        return f"MultiPortal(Portal count: {len(args)})"
+        return f"MultiPortal(Portal count: {len(self.args)})"
 
 
 class PotentialAnchor:
@@ -197,6 +197,7 @@ class MaterialObject:
         pinned: if True - cannot be moved
         label:  name shown in the UI
         active: if False - ignored
+        show_flux: bool - if true it show in every frame the flux
     """
 
     def __init__(self, mask: "Mask",
@@ -205,7 +206,8 @@ class MaterialObject:
                  label: str = "Object",
                  mass: float = 1.0,
                  charge: float = 1.0,
-                 active: bool = True) -> None:
+                 active: bool = True,
+                 show_flux: bool = False) -> None:
         self.mask   = mask
         self.color  = color
         self.pinned = pinned
@@ -215,6 +217,7 @@ class MaterialObject:
         self.active = active
         self.vx: float = 0.0
         self.vy: float = 0.0
+        self.show_flux = show_flux
 
     def __repr__(self) -> str:
         return (f"MaterialObject({self.label!r}, pinned={self.pinned}, "
