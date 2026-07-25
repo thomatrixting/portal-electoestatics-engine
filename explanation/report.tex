@@ -1,0 +1,938 @@
+\documentclass[12pt, twocolumn]{article}
+\usepackage{blindtext}
+\usepackage{graphicx}
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{siunitx}
+\usepackage{hyperref}
+\usepackage[letterpaper, margin=2.5cm]{geometry}
+\usepackage{titlesec}
+\usepackage[onecolabstract]{abstract}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{multirow}
+\usepackage[titletoc, title]{appendix}
+
+% --- Comentarios visibles solo en modo borrador ---
+\newif\ifborrador
+\borradortrue% Cambiar a \borradorfalse para la versión final
+
+\ifborrador
+  \usepackage{xcolor}  % Para usar color
+  \newcommand{\comentario}[1]{\textcolor{black}{\textbf{[#1]}}}
+\else
+  \newcommand{\comentario}[1]{}  % No imprime nada
+\fi
+
+\hypersetup{
+    colorlinks=false,
+    pdfborder={0 0 0}
+}
+
+\decimalpoint
+
+\renewcommand{\figurename}{Figura}
+
+\addto\captionsspanish{%
+  \renewcommand{\abstractname}{Resumen}
+}
+
+\newcommand{\tFH}{tubo de Franck-Hertz}
+
+
+
+\title{Simulación Numérica de Portales Electrostáticos como Identificaciones Geométricas del Espacio y su Efecto Sobre el Campo Eléctrico}
+\author{A. D. Cárdenas, L. S. Florez, ??, ??, ??}
+
+
+\date{\textit{Departamento de Física, Universidad Nacional, Bogotá, Colombia} \\[0.5cm] Julio 25 de 2026}
+
+
+\begin{document}
+\twocolumn[
+    \maketitle
+    \begin{abstract}
+        Se presenta una simulación bidimensional del comportamiento de portales en el contexto de la electrostática, entendidos como identificaciones geométricas de regiones del espacio que preservan la continuidad de los campos y los objetos que los atraviesan, siguiendo la construcción formal de Sheprut y los axiomas físicos derivados de ella. Para resolver la ecuación de Laplace en el dominio discretizado se implementaron dos métodos numéricos: el método de relajación con sobrerrelajación sucesiva en variante Red-Black (SOR) y el método de los momentos con funciones base pulso y point matching (MoM). Ambos solucionadores se integraron en un simulador interactivo desarrollado en Python, capaz de manejar anclas de potencial, conductores flotantes, cargas de prueba y portales acoplados con teletransporte.
+        Los resultados muestran que la velocidad de un objeto que atraviesa un portal es idéntica, fuera del instante de teletransporte, a la de un objeto en caída libre equivalente, confirmando que los portales no alteran la dinámica local del sistema. Asimismo, se verifica que el acoplamiento de dos portales modifica el campo electrostático de fondo, generando una región de gradiente $|\nabla \phi|$ reducido entre las bocas que actúa como zona de equilibrio. Este comportamiento es consistente con los axiomas de continuidad física e irrelevancia superficial, y valida la implementación numérica tanto para MoM como para SOR. En la comparación entre métodos, el MoM proporciona una solución directa y exacta, mientras que el SOR, al ser iterativo, presenta ligeras diferencias atribuibles a su proceso de convergencia, sin que estas alteren las conclusiones cualitativas del estudio.
+        
+        \textbf{Keywords:}
+    \end{abstract}
+]
+  
+
+\section{Introducción}
+
+La idea de los portales es ampliamente abordada en la ciencia ficción, como en la película \textit{Stargate} \cite{pelicula}, donde son un objeto central para el desarrollo de la misma (difiriendo, no obstante, en que los portales construidos en este escrito no cuentan con un grosor). Sin embargo, esta temática ha tenido poca rigurosidad en su construcción e interacción con problemas físicos. Por su parte, Ilya Sheprut \cite{portales} ha desarrollado la idea de los portales de manera extensa, presentando una construcción sólida de estos y divulgando ideas de cómo, con esta construcción, los portales interactúan con la gravedad. En este trabajo, con los mismos principios de los portales, se va a simular cómo sería el comportamiento de estos en el contexto de la electrostática.
+
+En esta construcción, un portal consiste en dos bocas que conectan dos regiones distintas del espacio. Estos no inducen efectos físicos y, a su vez, preservan la continuidad de los objetos y campos que los atraviesan. Resulta interesante estudiar cómo serían los portales y su comportamiento, no solo por el ejercicio mental que representan, sino también porque en Lorentzian wormholes: From Einstein to Hawking \cite{wormholes}, aunque se duda de que realmente se puedan atravesar, se emplea el mismo principio de conexión del espacio y de imposición de condiciones de continuidad sobre este.
+
+Para poder replicar estos portales se emplearon dos métodos numéricos diferentes: el método de relajación, que a grandes rasgos se basa en aproximar el potencial en una celda mediante el promedio de sus cuatro celdas adyacentes, conociendo el potencial en el interior de un material a partir de una condición de Dirichlet impuesta sobre este. El otro método utilizado fue el de MoM, el cual se usa para transformar un problema con un operador diferencial $L$ en un sistema lineal de ecuaciones, lo cual se logra expandiendo las funciones en una base y encontrando sus coeficientes.
+
+EXPLICACION DE QUE EJEMPLOS SE HICIERON - HACE FALTA LA SIMULACIÓN
+
+\vspace{-10pt}
+
+\section{Fundamento Teórico}
+
+\subsection{Electrostática}
+
+\subsubsection{Ecuaciones de Maxwell y condiciones complementarias}
+
+Las ecuaciones que determinan el comportamiento del campo eléctrico en el régimen estático son un caso particular de las ecuaciones de Maxwell. Cuando las cargas están en reposo y los campos no varían en el tiempo, las ecuaciones de Maxwell para campo eléctrico se reducen a:
+
+\begin{equation}
+    \nabla \cdot \mathbf{E} = \frac{\rho}{\varepsilon_0}, \label{eq:gauss_dif}
+\end{equation}
+
+\begin{equation}
+    \nabla \times \mathbf{E} = \mathbf{0}. \label{eq:rot_cero}
+\end{equation}
+
+La ecuación \ref{eq:gauss_dif} es la forma diferencial de la ley de Gauss; que establece que las fuentes del campo eléctrico son las cargas, con densidad volumétrica asociada $\rho$. La ecuación \ref{eq:rot_cero} expresa que el campo eléctrico estático es irrotacional, lo que permite expresar el campo eléctrico en términos de un potencial escalar $V$ tal que:
+
+\begin{equation}
+    \mathbf{E} = -\nabla V.
+    \label{eq:campo_potencial}
+\end{equation}
+
+Sustituyendo \ref{eq:campo_potencial} en \ref{eq:gauss_dif} se obtiene la ecuación de Poisson:
+
+\begin{equation}
+    \nabla^2 V = -\frac{\rho}{\varepsilon_0},
+    \label{eq:poisson}
+\end{equation}
+
+que en regiones libres de carga se reduce a la ecuación de Laplace:
+
+\begin{equation}
+    \nabla^2 V = 0.
+    \label{eq:laplace}
+\end{equation}
+
+Las ecuaciones \ref{eq:poisson} y \ref{eq:laplace} admiten infinitas soluciones; la solución única del problema planteado queda determinada al imponer condiciones sobre la frontera $\partial\mathcal{D}$ del dominio $\mathcal{D}$.
+
+Es posible tener condición de Dirichlet, donde se conoce el valor del potencial en la frontera
+
+\begin{equation}
+        V\big|_{\partial\mathcal{D}} = V_0(\mathbf{r}).
+        \label{eq:dirichlet}
+    \end{equation}
+
+Corresponde a conductores en equilibrio cuyo potencial es conocido.
+
+También es posible tener condición de Neumann, donde se conoce el valor de la derivada normal del potencial
+
+\begin{equation}
+        \frac{\partial V}{\partial n}\bigg|_{\partial\mathcal{D}} = g(\mathbf{r}),
+        \label{eq:neumann}
+    \end{equation}
+
+donde $\hat{n}$ es el vector normal exterior a $\partial\mathcal{D}$. Dado que $\partial V/\partial n = -E_n$, esta condición equivale a conocer la componente normal del campo eléctrico, relacionada con la densidad de carga superficial por $\sigma = \varepsilon_0\,E_n$.
+
+\subsubsection{Formulación integral del potencial}
+
+Usando la segunda identidad de Green, el potencial en un punto interior $\mathbf{r} \in \mathcal{D}$ puede expresarse exclusivamente en términos de los valores de $V$ y $\partial V/\partial n$ sobre la frontera $\partial\mathcal{D}$:
+
+\begin{equation} \label{eq:repr_integral}
+    \begin{gathered}
+        c(\mathbf{r}) V(\mathbf{r}) = \oint_{\partial \mathcal{D}} \bigg[
+        G(\mathbf{r}, \mathbf{r}') \frac{\partial V(\mathbf{r}')}{\partial n'} \\
+        - V(\mathbf{r}') \frac{\partial G(\mathbf{r}, \mathbf{r}')}{\partial n'}
+        \bigg] dS'
+    \end{gathered}
+\end{equation}
+
+donde $\partial/\partial n'$ es la derivada normal exterior evaluada en el punto de integración $\mathbf{r}'$ y $G(\mathbf{r}, \mathbf{r}')$ es la función de Green del operador de Laplace. En dos dimensiones es:
+
+Se tiene que las funciones de Green satisfacen 
+
+\begin{equation} \label{eq:green}
+    \nabla^2 G = -\delta(\mathbf{r} - \mathbf{r}')
+\end{equation}
+
+ya que el sistema tiene simetría radial alrededor de la carga, $G$ depende solo de $R = |\mathbf{r} - \mathbf{r}'|$. Quitando la dependencia angular, la expresión \ref{eq:green} se transforma en  
+\begin{equation}
+    \nabla^2 G = \frac{1}{R} \frac{d}{dR} \left( R \frac{dG}{dR} \right)
+\end{equation}
+
+Para $R \neq 0$, la delta de Dirac es cero, por lo que integrando la ecuación $\nabla^2 G = 0$ se obtiene
+
+\begin{equation}
+    R \frac{dG}{dR} = C
+\end{equation}
+
+E integrando nuevamente
+
+\begin{equation} \label{eq:G_gen}
+    G = C \ln R + C'
+\end{equation}
+
+Donde se escoge $C' = 0$. Ahora se integra la expresión \ref{eq:G_gen} en un círculo pequeño de radio $\epsilon$ alrededor de la carga y se aplica el teorema de la divergencia de Gauss en 2D
+
+\begin{equation}
+    \int_{\mathcal{C}} \nabla^2 G \, dA = \oint_{\partial \mathcal{C}} \nabla G \cdot \hat{n} \, dl
+\end{equation}
+
+A partir de donde $C = - \frac{1}{2\pi}$, y al expresión final de la función de Green sería
+
+\begin{equation}
+    G(\mathbf{r}, \mathbf{r}') = -\frac{1}{2\pi}\ln|\mathbf{r} - \mathbf{r}'|.
+    \label{eq:green_2d}
+\end{equation}
+
+\subsubsection{Problema de dos placas paralelas}
+
+Se considera el caso particular de dos placas conductoras planas y paralelas, separadas una distancia $d$ en la dirección $x$, con la placa izquierda en $x = 0$ y la derecha en $x = d$. En la región entre las placas, en ausencia de carga, el potencial satisface la ecuación de Laplace \ref{eq:laplace} unidimensional, cuya solución general es lineal en $x$.
+
+Considerando condición de Dirichlet, se impone $V(0) = V_1$ y $V(d) = V_2$, de modo que la solución es:
+
+\begin{equation}
+    V(x) = V_1 + (V_2 - V_1)\frac{x}{d}.
+    \label{eq:sol_dirichlet}
+\end{equation}
+
+Y el campo eléctrico resultante es uniforme:
+
+\begin{equation}
+    \mathbf{E} = -\frac{V_2 - V_1}{d}\,\hat{x}.
+    \label{eq:campo_dirichlet}
+\end{equation}
+
+Considerando ahora condición de Neumann, se impone densidad $+\sigma$ en $x = 0$ y $-\sigma$ en $x = d$. Las condiciones de Neumann en cada placa son:
+
+\begin{equation}
+    \left.\frac{\partial V}{\partial x}\right|_{x=0} = -\frac{\sigma}{\varepsilon_0},
+    \qquad
+    \left.\frac{\partial V}{\partial x}\right|_{x=d} = \frac{\sigma}{\varepsilon_0}.
+    \label{eq:placas_neumann}
+\end{equation}
+
+Y el campo entre las placas es nuevamente uniforme:
+
+\begin{equation}
+    \mathbf{E} = \frac{\sigma}{\varepsilon_0}\,\hat{x},
+    \label{eq:campo_neumann}
+\end{equation}
+
+y la diferencia de potencial entre las placas es:
+
+\begin{equation}
+    \Delta V = \frac{\sigma\ d}{\varepsilon_0}.
+    \label{eq:delta_v}
+\end{equation}
+
+\subsection{Método de los momentos} \label{sec:mom}
+
+El método de los momentos (MoM) es un método computacional desarrollado por R. F. Harrington en \textit{Field Computational by Moment Methods}, con este método se logra resolver ecuaciones como:
+
+\begin{equation*}
+    L(f) = g
+\end{equation*}
+
+Donde $f$ es la función desconocida, $L$ es un operador lineal que actúa sobre $f$ y $g$ es una función conocida \cite{MoM_og}. Se busca una aproximación de $f$ en función de una cantidad finita de funciones base con sus respectivos coeficientes, definiéndose por lo tanto un $\tilde{f}_N$:
+
+\begin{equation*}
+    f \approx \tilde{f}_N = \sum_{n=1}^{N}{\alpha_n f_n}
+\end{equation*}
+
+Ahora, si se usa esta $\tilde{f}_N$ en lugar de $f$ se llegaría a una expresión como:
+
+\begin{equation*}
+    R = L(\tilde{f}_N) - g  
+\end{equation*}
+
+Donde $R$ es el error causado a la aproximación tomada, si se quiere una aproximación buena se debe de minimizar este $R$ (siendo perfecta cuando $R=0$), que si se quisiera resolver para todo el espacio esto daría como resultado infinitas ecuaciones que no se podrán resolver. Al tener $N$ incógnitas se necesitaran por lo tanto $N$ ecuaciones, para ello se proyectara este error en $N$ funciones de prueba $w_i$ conocidas de tal manera que sean ortogonales $\langle R, w_i\rangle$, que sustituyendo queda:
+
+\begin{equation*}
+    \scalebox{0.9}{$
+        \begin{gathered}
+            \int{(L(\alpha_1f_1 +\alpha_2f_2+....+\alpha_Nf_N) -g)\cdot w_i \, dx }=0 \\
+            \alpha_1 \int{L(f_1) w_i} +....+ \alpha_N \int{L(f_N) w_i} = \int{g\, w_i}
+        \end{gathered}
+    $}
+\end{equation*}
+
+Siendo ya un problema de un sistema de $N$ ecuaciones lineales con $N$ incógnitas, siendo de la forma $[l_{mn}][\alpha_n] = [g_m]$, donde:
+
+\[
+[l_{mn}] = 
+\begin{bmatrix}
+\langle w_1, Lf_1 \rangle & \langle w_1, Lf_2 \rangle & \cdots \\
+\langle w_2, Lf_1 \rangle & \langle w_2, Lf_2 \rangle & \cdots \\
+\vdots & \vdots & \ddots
+\end{bmatrix}
+\]
+
+\[
+[\alpha_n] = 
+\begin{bmatrix}
+\alpha_1 \\
+\alpha_2 \\
+\vdots
+\end{bmatrix}
+\quad
+; \;
+[g_m] = 
+\begin{bmatrix}
+\langle w_1, g \rangle \\
+\langle w_2, g \rangle \\
+\vdots
+\end{bmatrix}
+\]
+
+Siendo $[l^{-1}]$ la inversa de $[l]$, los coeficientes $\alpha_n$ están dados por:
+
+\begin{equation*}
+    [\alpha_n] = [l_{mn}^{-1}][g_m]
+\end{equation*}
+
+Y siendo $[\tilde{f}_n] = [f_1 \; f_2\;f_3\;....]$, se puede escribir:
+
+\begin{equation*}
+    f = [\tilde{f}_n][\alpha_n] = [\tilde{f_n}][l_{mn}^{-1}][g_m]
+\end{equation*}
+
+Esta solución dependiendo entonces de las funciones bases y de prueba escogidas.
+
+Una manera sencilla de poder evaluar los $l_{mn} = \langle w_m, Lf_n \rangle$ es discretizando los puntos en la región de interés. Este procedimiento es conocido como \textit{point matching} \cite{MoM_og}, que en términos prácticos es usar deltas de Dirac como las funciones de prueba $w_i$.
+
+\subsubsection{Aplicación a la electrostática}
+
+En el caso de la electrostática, se puede plantear la situación de un conductor perfecto (PEC) con una superficie $S$ dispuesto en un medio homogéneo y sometido a un campo externo $\mathbf{E}_{\text{exc}}$. El problema consiste en determinar la densidad de carga superficial $\rho_s(\mathbf{r´})$ inducida sobre la superficie del PEC, la ecuación que describe el problema es:
+
+\begin{equation*}
+    G \otimes \rho_s = 4\pi \epsilon_0 (U - V_{\text{exc}})  
+\end{equation*}
+
+Donde $G$ es la función de Green del espacio libre, $V_{\text{exc}}$ es el potencial de excitación y $U$ es el potencial sobre la superficie del conductor \cite{MoM}, la función que se expande es $\rho_s$:
+
+\begin{equation*}
+    \rho_s(\mathbf{r'}) \approx \sum_{j=1}^{N} \alpha_j b_j(\mathbf{r'})
+\end{equation*}
+
+Discretizando el espacio en celdas de área $S_j$ se escogen funciones base $b_j$ pulso de la forma:
+
+\[
+b_j(\mathbf{r}') =
+\begin{cases} 
+\frac{1}{S_j} & \text{si } \mathbf{r}' \in S_j \\
+0 & \text{si } \mathbf{r}' \notin S_j
+\end{cases}
+\]
+
+Ahora se aplica \textit{point matching}, en este las funciones de prueba $t_i(\mathbf{r})$ son deltas de Dirac $t_i(\mathbf{r}) = \delta(\mathbf{r}-\mathbf{r}_i)$ con $\mathbf{r}_i$ es el centro de la celda $S_i$.
+
+Aplicando el producto interno $\langle t_i, f \rangle$, se obtiene la forma matricial $[c_{ij}][\alpha_j]=[e_i]$, cuyos elementos se definen como:
+
+\begin{equation*}
+    \begin{gathered}
+        c_{ij} = \langle t_i, G \otimes b_j \rangle\\
+        c_{ij}= \int_S{\delta(\mathbf{r}-\mathbf{r_i})} \left[ \int_{S_{j}}{G(\mathbf{r},\mathbf{r'})b_j(\mathbf{r}')dS'}  \right]dS \\
+        e_i = 4\pi\epsilon_0 \langle t_i, U - V_{\text{exc}} \rangle \\
+        e_i = 4\pi\epsilon_0 \left[ U - V_{\text{exc}}(\mathbf{r}_i)\right]
+    \end{gathered}
+\end{equation*}
+
+Para la simplificación de la notación y el cálculo de los elementos de la matriz, se introduce la función de Green discreta $\Gamma_{ij}$ \cite{MoM}, esta se define como el valor promedio de la función de Green cuando la fuente se extiende sobre la celda $S_j$ con el observador en $\mathbf{r}_i$:
+
+\begin{equation*}
+    \Gamma_{ij} = \Gamma(\mathbf{r}_i,S_j) = \frac{1}{S_j} \int_{S_j} G(\mathbf{r}_i,\mathbf{r'}) dS'
+\end{equation*}
+
+Siendo entonces se puede aproximar:
+
+\begin{equation*}
+    c_{ij} \approx \Gamma(\mathbf{r}_i,S_j)
+\end{equation*}
+
+
+\subsection{Método de relajación}
+
+El método de relajación es una técnica numérica para resolver la ecuación de Laplace o su generalización, la ecuación de Poisson sobre un dominio discretizado \cite{WikipediaRelaxation}. La siguiente descripción del método de relajación está basada en la referencia
+\cite{ZinCin2026}.
+
+Se tiene que la solución numérica de la ecuación de Laplace en un dominio bidimensional discretizado conduce a un sistema lineal de gran tamaño, cuya resolución mediante métodos directos resulta computacionalmente costosa cuando aumenta el número de nodos de la malla. Por esta razón, es común emplear métodos iterativos, los cuales generan aproximaciones sucesivas al potencial eléctrico hasta alcanzar una solución convergente.
+
+Considerando una región libre de cargas, el potencial eléctrico satisface la ecuación de Laplace (\ref{eq:laplace}). Al discretizar el dominio mediante una malla uniforme de paso $h$, utilizando diferencias finitas centradas para las derivadas de segundo orden, se obtiene la conocida plantilla de cinco puntos,
+
+\begin{equation}
+\phi_{i,j}
+=
+\frac{1}{4}
+\left(
+\phi_{i-1,j}
++
+\phi_{i+1,j}
++
+\phi_{i,j-1}
++
+\phi_{i,j+1}
+\right),
+\label{eq:laplace_discreta}
+\end{equation}
+
+la cual establece que el potencial en cada nodo interior corresponde al promedio aritmético de sus cuatro vecinos inmediatos.
+
+Similarmente, el método de Jacobi calcula el potencial en todos los nodos empleando únicamente los valores obtenidos en la iteración anterior. Aquí, la actualización está dada por
+
+\begin{equation}
+\phi_{i,j}^{(k+1)}
+=
+\frac{1}{4}
+\left(
+\phi_{i-1,j}^{(k)}
++
+\phi_{i+1,j}^{(k)}
++
+\phi_{i,j-1}^{(k)}
++
+\phi_{i,j+1}^{(k)}
+\right),
+\end{equation}
+
+donde el superíndice $(k)$ representa la iteración correspondiente. Aunque este método es sencillo de implementar, su velocidad de convergencia suele ser baja.
+
+Por lo que una mejora del método anterior consiste en utilizar inmediatamente los valores calculados durante la iteración actual. En este caso, la actualización toma la forma
+
+\begin{equation*}
+\phi_{i,j}^{(k+1)}
+=
+\frac{1}{4}
+\left(
+\phi_{i-1,j}^{(k+1)}
++
+\phi_{i+1,j}^{(k)}
++
+\phi_{i,j-1}^{(k+1)}
++
+\phi_{i,j+1}^{(k)}
+\right)
+\end{equation*}
+
+Al aprovechar la información más reciente disponible, este método reduce significativamente el número de iteraciones necesarias para alcanzar la convergencia.
+
+Con el objetivo de acelerar aún más la convergencia, se emplea el método de Sobre-relajación Sucesiva (Successive Over-Relaxation, SOR), el cual introduce un parámetro de relajación $\omega$, cuyo valor óptimo suele encontrarse en el intervalo
+
+\begin{equation*}
+    1 < \omega < 2
+\end{equation*}
+
+Primero se calcula el valor obtenido mediante el esquema de Gauss--Seidel,
+
+\begin{equation}
+\tilde{\phi}_{i,j}
+=
+\frac{1}{4}
+\left(
+\phi_{i-1,j}^{(k+1)}
++
+\phi_{i+1,j}^{(k)}
++
+\phi_{i,j-1}^{(k+1)}
++
+\phi_{i,j+1}^{(k)}
+\right),
+\end{equation}
+
+y posteriormente se actualiza el potencial mediante
+
+\begin{equation}
+\phi_{i,j}^{(k+1)}
+=
+(1-\omega)\phi_{i,j}^{(k)}
++
+\omega\tilde{\phi}_{i,j},
+\end{equation}
+
+o, de forma equivalente,
+
+\begin{equation}
+\phi_{i,j}^{(k+1)}
+=
+\phi_{i,j}^{(k)}
++
+\omega
+\left(
+\tilde{\phi}_{i,j}
+-
+\phi_{i,j}^{(k)}
+\right).
+\end{equation}
+
+Cuando $\omega=1$, el método SOR se reduce al método de Gauss-Seidel. Valores de $\omega$ mayores que uno permiten acelerar la eliminación de los errores de baja frecuencia, disminuyendo considerablemente el número de iteraciones requeridas para alcanzar un criterio de convergencia determinado. 
+
+En este trabajo se implementa la variante Red-Black SOR, la cual facilita la vectorización del algoritmo y elimina la dependencia respecto al orden de recorrido de la malla.
+
+La estrategia consiste en dividir los nodos interiores en dos subconjuntos, análogos a un tablero de ajedrez: Nodos rojos, para los cuales $i+j$ es par y nodos negros, para los cuales $i+j$ es impar. Debido a esta partición, todos los vecinos de un nodo rojo son necesariamente negros, y viceversa. Y cada iteración completa se divide en dos etapas: Se actualizan simultáneamente todos los nodos rojos utilizando los valores actuales de los nodos negros y posteriormente se actualizan todos los nodos negros empleando los nuevos valores obtenidos para los nodos rojos.
+
+Esta estrategia conserva las propiedades de convergencia del método SOR, al tiempo que permite una implementación altamente eficiente mediante operaciones vectorizadas, lo cual es especialmente importante en simulaciones con un elevado número de nodos.
+
+\subsection{Portales}\label{sec:portales}
+
+Un portal es la construcción geométrica que identifica dos regiones del espacio con geometría $(X,P,\omega)$, $X$ es el espacio (puede ser euclidiano, de Minkowski, etc): $P$ es un fibrado principal. En el contexto físico, se puede interpretar como el conjunto de todos los marcos de referencia posibles en cada punto de $X$ y $\omega$ es la conexión, este determina como transportar paralelamente un marco de un punto a otro infinitesimalmente cercano. El portal se construye cortando $X$ a lo largo de una superficie $S$ y definiendo un conjunto de entradas que se pegan entre sí según un patrón de identificación $\gamma$.
+
+Cada boca debe especificar dos cosas: adónde va a parar un punto al cruzar (mediante una función $f$ y un levantamiento geométrico $\Phi_f$. Este levantamiento es la transformación correspondiente al nivel del fibrado $P$, y determina cómo se reorienta o se transforma el marco de referencia de un observador al atravesar dicha entrada, siendo compatible con la conexión $\omega$. Por lo tanto, es necesario conocer no solo dónde se llega, sino también con qué orientación se llega; de lo contrario, podrían presentarse discontinuidades en las leyes físicas locales.
+
+Como resultado de esta manipulación del espacio, el objeto material $X_D$ coincide con el espacio original lejos de la superficie de corte, y solo difiere de este en su topología global cerca del portal. Como propiedad de esta construcción se encuentra la irrelevancia de superficie: si las regiones conectadas por las entradas son geométricamente equivalentes, la posición exacta de la superficie de corte no es observable desde fuera; el portal es una relación de equivalencia entre regiones, no es un objeto con una ubicación física bien definida.
+
+\subsubsection{Axiomas Físicos}\label{sec:axiomas}
+
+Desde la sección 2 de \textit{A geometric theory of portals}, se toman los axiomas físicos para que un portal sea consistente, siendo estos
+ \begin{enumerate}
+     \item Localidad de las ecuaciones de movimiento
+     \item Invariancia bajo simetrías espacio temporales 
+     \item Invariancia gauge
+     \item Continuidad física a través del portal
+     \item Irrelevancia Superficial 
+     \item Funtorialidad cuántica e mundo admisibles
+ \end{enumerate}
+
+Ahora revísese cada una de los axiomas físicos de los portales.
+
+\paragraph{Axioma 1: Localidad de las ecuaciones de movimiento}
+
+Establece que la ecuación de movimiento (o del campo) en cualquier punto que no pertenezca a la superficie del portal tiene que ser idéntica en su forma funcional a la ecuación que habría sin portal. Esto consistente en que el Lagrangiano depende únicamente de los campos y un número finito de derivadas en el mismo punto, es decir este es una función local. Como en la construcción del portal este deja la geometría sin modificar fuera de la región de pegado y el Lagrangiano es local, entonces este no modifica las ecuaciones de movimiento. 
+
+Como ejemplo se puede plantear a par hermanos Jackson y Griffiths, Jackson mide la temperatura cerca del portal, luego lo quita y Griffiths mide la temperatura en esos mismos puntos pero sin portal, encuentran que esta no varia; de no cumplirse el axioma al quitar el portal podria aumentar la temperatura cerca de este, el quitarlo y ponerlo lo haria una fuente de energía inagotable.
+
+\paragraph{Axioma 2: Invariancia bajo simetrías espaciotemporales G} Exige que las leyes físicas que actúan sobre y a través del portal, no dependen de la orientación, la posición o el estado de movimiento desde el que se mire el portal (siempre y cuando estén permitidas por la geometría del portal). Es consistente bajo el principio de relatividad, las leyes físicas no dependen de su origen de coordenadas. El axioma exige el Lagrangiano $L$ de una partícula sea invariante bajo estas transformaciones.
+
+Se puede plantear como ejemplo a dos hermanos Jackson y Griffiths, el lunes a las 12:00 Jackson entra al portal; Domingo mide su peso antes y despues, siendo iguales a su vez mide la energía total antes y despues, coincidiendo, sucediendo lo mismo de medirse un miercoles a las 8:00, no existen epocas preferidas; ahora de no cumplirse este axioma, el portal podria tener un desfase de 48 horas entre boca y boca del portal, con este desfase temporal este actúa como una maquina que extrae o inyecta energía al sistema, Jackson podría entonces construir un ciclo mandando un objeto (o a Griffiths) por el portal repetidamente extrayendo energía de cada ciclo, convirtiendo el portal en una fuente inagotable de energía; violando la conservación de energía de este sistema.
+
+\paragraph{Axioma 3: Invariancia gauge}
+
+Establece que una transformación gauge aplicada de un lado del portal sea consistente con lo que ocurre del otro lado; donde una transformación de gauge es aquella que mantiene invariante el Lagrangiano, y por ende, la dinámica del sistema \cite{WikipediaGauge}. De no cumplirse esto, si se tuviera, por ejemplo, un potencial vectorial $\vec{A}$ y se aplica una transformación de gauge $A \to A + \nabla \chi$, al atravesar el portal, este potencial sufriría un salto arbitrario que no es atribuible a ninguna función $\chi$.
+
+Supóngase que dos hermanos, Jackson y Griffiths, observan el mismo sistema físico desde lados opuestos de un portal. Cada uno adopta un sistema de coordenadas y una elección de potencial diferente para describir el campo eléctrico. Aunque las expresiones matemáticas del potencial no coincidan, ambos calculan exactamente el mismo campo eléctrico y, por tanto, predicen el mismo movimiento de una partícula cargada. Las dos descripciones difieren únicamente por una transformación de gauge, por lo que representan la misma realidad.
+
+\paragraph{Axioma 4: Continuidad física a través del portal}
+
+Establece que el campo y su potencial asociado sobre las fronteras de ambas caras de los portales sea continuo, es decir, no sufra ningún salto debido a la presencia del portal. Es decir, en términos de las ecuaciones \ref{eq:gauss_dif} y \ref{eq:rot_cero}, se tienen las condiciones de frontera
+
+\begin{equation} \label{eq:E_normal}
+    \epsilon_1 E_{1n} = \epsilon_2 E_{2n}
+\end{equation}
+
+donde $\epsilon$ son las permitividades de los medios. Además,
+
+\begin{equation}
+    E_{1t} = E_{2t}
+\end{equation}
+
+La expresión \ref{eq:E_normal} establece la continuidad del campo eléctrico normal, y, debido a que no hay material o carga en la costura del portal, la expresión se reduce a:
+
+\begin{equation}
+    E_{1n} = E_{2n}
+\end{equation}
+
+\paragraph{Axioma 5: Irrelevancia superficial}
+
+Exige que la superficie del portal no sea una fuente de efectos físicos por si misma. Esta superficie solo es una frontera donde se hace un cambio de conectividad en el espacio, no como una fuente física nueva. 
+
+Como ejemplo se plantea a dos hermanos Jackson y Griffiths que están estudiando la ecuación de difusión del calor, Jackson y Griffiths parten de un punto P, Jackson se queda midiendo la temperatura localmente, no detectando nada fuera de lo común, mientras que Griffiths entra al portal desde ese punto A, este lo transporta al punto B y se viene caminando desde este hasta el punto P mientras seguida estudiando la ecuación de difusión del calor, al completar el camino cerrado descubre que la temperatura que mide desde su perspectiva es diferente a la de Jackson, al haber acumulado un desfase al recorrer el lazo a través del portal. El desfase no se puede detectar en ningún punto individual del espacio, es decir el portal no es una fuente de efectos físicos, es un efecto meramente global.
+
+\paragraph{Axioma 6: Funtorialidad cuántica}
+
+Se establece que, si dos configuraciones de portal son geométricamente equivalentes (es decir, una se puede obtener de la otra mediante simetrías del espacio sin cambiar nada observable desde afuera), entonces la física cuántica construida sobre esas dos configuraciones debe ser equivalente.
+
+Por ejemplo, dos hermanos, Jackson y Griffiths, poseen un par de portales conectados. Jackson prepara un electrón con su espín orientado hacia arriba y lo envía a través del portal. Como las dos bocas del portal están rotadas $180^\circ$, Griffiths no puede describir el electrón utilizando exactamente el mismo estado que empleó Jackson; debe transformarlo para tener en cuenta la nueva orientación espacial. Sin embargo, ambos hermanos obtienen las mismas probabilidades al medir el espín en sus respectivos sistemas de referencia.
+
+\section{Metodología computacional}
+
+\subsection{Introducción a la simulación computacional}
+
+La implementación computacional del presente trabajo tiene como objetivo resolver numéricamente la ecuación de Laplace en un dominio bidimensional, incorporando objetos que modifican el potencial electrostático y, de manera central, portales que conectan regiones del espacio de acuerdo con la construcción geométrica presentada en la sección \ref{sec:portales}. El simulador permite interactuar en tiempo real con escenarios que incluyen anclas de potencial fijo, conductores, obstáculos dieléctricos y cargas de prueba, con el propósito de estudiar los efectos de los portales sobre el campo eléctrico.
+
+El software fue desarrollado en \textit{Python} \cite{Python}, haciendo uso de las bibliotecas \textit{NumPy} \cite{NumPy} para el cálculo numérico y \textit{Pygame} \cite{Pygame} para la interfaz gráfica y la interacción del usuario. La arquitectura del código sigue un diseño orientado a objetos, separando el motor de física (que resuelve las ecuaciones de campo) y la capa de visualización e interacción. Esta modularidad permite ejecutar la simulación tanto con interfaz gráfica como en modo \textit{headless}, lo que resulta útil para pruebas automatizadas o ejecuciones en servidores sin capacidad de renderizado.
+
+Los módulos principales que componen el sistema son: \texttt{physics.py}, que implementa el solucionador iterativo por relajación sobre una malla regular; \texttt{mom\_solver.py} y \texttt{mom\_mesh.py}, que implementan el método de los momentos para resolver el problema de forma directa mediante la discretización de las fronteras; \texttt{portals.py}, que define las clases de objetos de campo, como anclas de potencial, portales, conductores y objetos materiales; \texttt{masks.py}, que proporciona herramientas para definir formas geométricas sobre la malla (rectángulos, círculos, polígonos, funciones analíticas); \texttt{test\_charge.py}, que implementa la dinámica de partículas de prueba mediante el integrador Velocity Verlet; \texttt{simulation.py}, que se encarga de ejecutar el bucle principal de simulación, la actualización de los solucionadores, la lógica de teletransporte y el renderizado; finalmente, \texttt{ui.py} y \texttt{colors.py}, que gestionan la interfaz de usuario y los esquemas de color para la visualización.
+
+El usuario puede construir escenas combinando libremente los objetos de campo y modificar parámetros en tiempo real a través de un panel lateral. Además, se incluyen escenas predefinidas en el módulo \texttt{scenes.py} que ilustran configuraciones típicas, como dos portales enfrentados, conductores en campos uniformes y obstáculos no conductores, que sirven como casos de prueba para validar el comportamiento del simulador.
+
+\subsection{Solucionadores numéricos}
+
+El núcleo de la simulación consiste en resolver la ecuación de Laplace en dos dimensiones para el potencial electrostático $V(x,y)$, válida en regiones libres de carga. Para ello, se han implementado dos métodos numéricos: el método de relajación con sobre-relajación sucesiva (SOR) y el método de los momentos (MoM). Ambos solucionadores están disponibles y el usuario puede elegir cuál utilizar en cada escena.
+
+\subsubsection{Método de relajación con sobre-relajación sucesiva}
+
+El método de relajación se basa en la discretización del dominio mediante una malla uniforme de paso $h$, aproximando las derivadas segundas por diferencias finitas centradas. Un parámetro importante de este método es $\omega$, que se encuentra típicamente en el intervalo $1 < \omega < 2$. Valores cercanos a 1 producen una convergencia lenta pero estable, mientras que valores próximos a 2 aceleran la convergencia pero pueden provocar inestabilidad numérica. En las simulaciones presentadas se ha utilizado $\omega = 1.7$, que ofrece un buen equilibrio entre rapidez y precisión para las mallas empleadas.
+
+Una característica fundamental de este solucionador es su capacidad para manejar condiciones de contorno variables en el tiempo, ya que el potencial se recalcula en cada iteración. Esto permite que objetos como conductores flotantes o portales acoplados ajusten su potencial dinámicamente. En el caso de los portales, la implementación impone la continuidad del potencial entre las bocas acopladas: en cada iteración, se promedia el potencial de todas las celdas pertenecientes a las bocas de un portal, y dicho valor promedio se asigna a todas ellas. De este modo, se satisface el axioma de continuidad física a través del portal.
+
+El proceso iterativo se detiene cuando el cambio máximo en el potencial entre iteraciones consecutivas es inferior a un umbral predefinido (típicamente $10^{-6}$, o bien tras un número fijo de iteraciones por fotograma (por defecto 50), lo que asegura una respuesta en tiempo real durante la interacción del usuario.
+
+\subsubsection{Método de los momentos}
+
+Como alternativa al método iterativo, se ha implementado el método de los momentos para resolver el problema electrostático de forma directa. Este método, descrito en el apartado \ref{sec:mom}, transforma la ecuación integral de frontera en un sistema lineal de ecuaciones.
+
+En la implementación, las fronteras de los objetos conductores y las anclas de potencial se discretizan en pequeños segmentos, y se emplean funciones base pulso para aproximar la densidad de carga superficial. Se aplica el método de \textit{point matching}, utilizando funciones de prueba deltas de Dirac centradas en los puntos de colocación. La matriz del sistema se construye a partir de los coeficientes de interacción entre segmentos, que involucran la función de Green bidimensional del espacio libre (\ref{eq:green_2d}).
+
+Una de las ventajas del método de los momentos es que proporciona una solución en un solo paso, sin necesidad de iterar. Además, maneja de manera natural los portales: en lugar de promediar iterativamente, las bocas acopladas se tratan como una única incógnita de potencial compartida en el sistema lineal, de modo que la continuidad se impone directamente en la formulación matricial.
+
+Sin embargo, el método de los momentos presenta limitaciones importantes en el contexto de una simulación interactiva. Al ser un método directo, el campo se calcula una sola vez al inicio de la simulación y no se actualiza en tiempo real. Esto impide la inclusión de objetos dinámicos como conductores flotantes, cuyo potencial debería reequilibrarse en cada paso. Por esta razón, cuando se selecciona el MoM, los conductores se comportan como objetos materiales fijos sin carácter dinámico. El método de los momentos es, por lo tanto, adecuado para escenas estáticas donde se desea una solución precisa de referencia.
+
+\subsection{Implementación de objetos de campo y condiciones de contorno}
+
+Para poder identificar como trabajan los portales en esta simulación, es necesario no solo resolver la ecuación de Laplace en el vació, sino también colocar objetos físicos a los cuales se estudió cómo les afecta la presencia de los portales. A su vez, conviene considerar el tipo de portales que se usaron y cómo se impusieron condiciones sobre los objetos.
+
+\begin{itemize}
+    \item \textbf{Anclas de potencial (\texttt{PotentialAnchor})}: fijan el potencial a un valor constante en las celdas que ocupan. Equivalen a condiciones de Dirichlet localizadas y actúan como fuentes o sumideros del campo.
+    
+    \item \textbf{Portales (\texttt{Portal} y \texttt{CouplePortal})}: un portal es una región del espacio que se identifica con otra mediante una boca acoplada. La clase \texttt{CouplePortal} agrupa dos bocas y garantiza que el potencial sea el mismo en todas las celdas de ambas, promediando en cada iteración (en SOR) o compartiendo la incógnita (en MoM). La clase \texttt{MultiPortal} permite acoplar más de dos bocas, pero solo para el potencial; el teletransporte solo está implementado para parejas.
+    
+    \item \textbf{Conductores (\texttt{ConductorObject})}: representan cuerpos conductores flotantes. En cada iteración del SOR, se calcula el promedio del potencial en las celdas vecinas exteriores al conductor y se asigna ese valor a todas las celdas del conductor, simulando así la equipotencialidad y la redistribución de carga. Este proceso se repite hasta alcanzar la convergencia. Cuando está activo el MoM, los conductores no se actualizan dinámicamente.
+    
+    \item \textbf{Objetos materiales (\texttt{MaterialObject})}: son obstáculos sólidos que no afectan directamente al potencial, pero que pueden ser teletransportados a través de los portales. En el modo SOR, se puede activar una bandera para que el solucionador ignore las celdas ocupadas por el objeto, forzando al campo a rodearlo (lo que simula un dieléctrico impermeable). Sin embargo, por defecto, el objeto no modifica la solución de Laplace.
+    
+    \item \textbf{Cargas de prueba (\texttt{TestCharge})}: son partículas puntuales que se mueven bajo la acción del campo eléctrico pero no contribuyen a él. Su dinámica se resuelve con el integrador Velocity Verlet, y el campo se muestrea mediante interpolación bilineal del gradiente del potencial, lo que proporciona trayectorias suaves incluso a subcelda.
+\end{itemize}
+
+Las condiciones de contorno del espacio se definen para condiciones de Dirichlet y para Neumann. Para las de Dirichlet se fija el borde superior de la malla a $V=1$ y el borde inferior a $V=0$, para los laterales se establecen condiciones de Neumann homogéneas ($\partial V /\partial n = 0$), esto ultimo permite simular un dominio abierto. Estas condiciones pueden ser modificadas mediante anclas de potencial adicionales.
+
+\subsection{Manejo de portales: acoplamiento de potencial y teletransporte}
+\label{sec:teletransporte}
+
+La implementación de los portales sigue los axiomas físicos presentados en la sección \ref{sec:axiomas}, en particular el axioma de continuidad física a través del portal (Axioma 4) y el de irrelevancia superficial (Axioma 5).
+
+\textbf{Acoplamiento de potencial}: para cada par de bocas acopladas, se impone que el potencial sea el mismo en cada punto de ambas bocas. Con SOR esto se logra en cada iteración calculando el promedio del potencial sobre todas las celdas pertenecientes a las bocas acopladas después de cada iteración, llegando a la convergencia que respeta la continuidad a través del portal. En el método MoM, el acoplamiento se incorpora directamente en el sistema lineal, definiendo una única variable de potencial para el conjunto de bocas. Esta estrategia garantiza la continuidad del campo eléctrico (componentes tangencial y normal) en la interfaz del portal, en concordancia con el Axioma 4 de la teoría de portales.
+
+
+
+\textbf{Teletransporte de objetos y cargas de prueba}: cada boca de portal posee una región de activación, definida como un área ligeramente mayor que la propia boca, que actúa como disparador. Cuando el centro de masa de un objeto material o la posición de una carga de prueba entra en esta región, el objeto o la carga es teletransportado a la boca correspondiente del portal acoplado. El teletransporte se realiza aplicando un desplazamiento vectorial que conserva la posición relativa dentro de la boca de destino, de modo que el objeto aparece en la misma posición relativa respecto a la boca de salida. Para evitar que el objeto o la carga sea teletransportado repetidamente en el mismo instante, se aplica un pequeño desplazamiento adicional a lo largo de su velocidad, de manera que salga de la región de activación inmediatamente.
+
+Este mecanismo implementa la identificación de regiones del espacio descrita en la teoría de portales (sección \ref{sec:portales}), preservando la continuidad de las trayectorias de los objetos (Axioma 4) y sin introducir efectos físicos espurios en la superficie del portal (Axioma 5). Además, el teletransporte se realiza de forma instantánea, lo que es consistente con la construcción geométrica de identificación de puntos.
+
+
+\subsection{Parámetros de simulación y convergencia}
+
+La simulación ofrece varios parámetros ajustables que permiten controlar la precisión, el rendimiento y la visualización. Los más relevantes son:
+\begin{itemize}
+    \item \textbf{Resolución de la malla}: el dominio se divide en una cuadrícula de $W \times H$ celdas, donde $W$ y $H$ son el ancho y el alto en píxeles. Los valores típicos usados fueron de  son $80 \times 80$ para ejecución rápida, $120 \times 120$ de estándar y $200 \times 150$ para alta precisión. La resolución afecta directamente al tiempo de cómputo y a la suavidad del campo.
+    \item \textbf{Iteraciones por fotograma}: en el modo SOR, el número de iteraciones realizadas por cada ciclo de renderizado. Un valor de 40 a 60 iteraciones suele ser suficiente para que el campo evolucione visiblemente en tiempo real. Si se desea una convergencia completa, se puede aumentar hasta que el cambio máximo entre iteraciones sea inferior al umbral. 
+    \item \textbf{Parámetro de relajación $\omega$}: controla la velocidad de convergencia del SOR. Como se indicó, $\omega = 1.7$ es un valor equilibrado. Para problemas con geometrías muy irregulares, puede ser necesario ajustarlo entre 1.5 y 1.9. Valores superiores a 1.9 pueden dar lugar a oscilaciones o divergencia.
+    \item \textbf{Umbral de convergencia}: fijado por defecto en $10^{-6}$ , determina cuándo se considera que el campo ha alcanzado la solución estacionaria. Una vez alcanzado, el solucionador puede detenerse hasta que algún objeto se mueva o se modifique una condición de contorno.
+    \item \textbf{Modos de visualización}: el usuario puede alternar entre la representación del potencial $V(x,y)$ (escala de colores) y la magnitud del campo eléctrico $|\mathbf{E}|$, así como activar la superposición de vectores de campo e isolíneas. Los esquemas de color disponibles incluyen mapas de colores que resaltan gradientes, como el \textit{default} (azul-verde-amarillo-rojo) o el \textit{plasma}.
+\end{itemize}
+
+\subsection{Método de las imágenes en MOM}
+
+El solver de Método de los Momentos (MOM) calcula el potencial modelando únicamente los objetos fijados en la escena (anclas de potencial, portales) como elementos de frontera con el núcleo de espacio libre $-\log(r)$. Las paredes laterales del dominio de simulación no están representadas de ninguna forma en ese esquema. El solver SOR, en cambio, impone una condición de Neumann en los bordes izquierdo y derecho ($\partial \phi / \partial x = 0$, ver \texttt{physics.py}), mientras que MOM asume un plano infinito. Cuando un ancla de potencial ocupa todo el ancho de la simulación, como en las escenas construidas con \texttt{\_anchors()}, su longitud finita produce el efecto de borde típico de una placa de capacitor finita: el campo se curva cerca de sus dos extremos.
+
+Para reproducir en MOM la misma condición que SOR impone en los bordes laterales, se agregó el método de las imágenes: la contribución de cada segmento de frontera se refleja sobre las dos paredes verticales del dominio usando imágenes del mismo signo (imágenes de tipo Neumann, no de Dirichlet), siguiendo el esquema de reflexiones entre dos espejos paralelos y truncando la serie a un orden finito. La corrección se activa con la bandera \texttt{mom\_images=True} al construir la \texttt{Simulation} y no agrega incógnitas al sistema, solo modifica la función de Green efectiva que se suma por cada segmento, tanto al construir la matriz de influencia como al evaluar el potencial sobre la grilla.
+
+\section{Resultados}\label{Result}
+
+Para validar el correcto funcionamiento del simulador y demostrar los efectos de los portales, se han diseñado varios escenarios de prueba incluidos en el módulo \texttt{scenes.py}. Los cuales se discuten a continuación
+
+\subsection{Equipotenciales}
+
+\subsubsection{Primera configuración}
+
+
+Una de las primeras verificaciones para confirmar que ambos solvers se comportan de forma físicamente consistente fue comprobar que un par de portales acoplados (\texttt{CouplePortal}) termine en el mismo potencial, como corresponde a dos superficies conectadas eléctricamente. Para esto se construyó una escena con un ancla de potencial $\phi = 1$ en el borde superior y otra de $\phi = 0$ en el borde inferior, lo que genera un gradiente vertical uniforme. Sobre ese fondo se ubicó un par de portales enfrentados con separación horizontal fija, variando la separación vertical $d$ entre sus centros en $0$, $40$, $80$ y $120$ unidades de grilla.
+
+Las figuras \ref{fig:mom_distancias_0} y \ref{fig:mom_distancias_80} muestran el potencial resultante para dos valores de $d$ (el resto está en la sección \ref{sec:apendice} en la figura \ref{fig:mom_distancias}) con MOM, de manera análoga se hizo con SOR, corresponiendo a las figuras \ref{fig:sor_distancias_0} y \ref{fig:sor_distancias_80} (con el resto en la sección \ref{sec:apendice} en la figura \ref{fig:sor_distancias}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{campo_por_distancia_mom_0.png}
+    \caption{Potencial eléctrico resuelto con MOM para un par de portales acoplados (segmentos rojo y azul, con flecha indicando su orientación) separados verticalmente por $d = 0$ unidades de grilla.}
+    \label{fig:mom_distancias_0}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{campo_por_distancia_mom_80.png}
+    \caption{Misma escena y mismo esquema de color que la Figura \ref{fig:mom_distancias_0} siguiendo con MOM pero ahora con $d = 80$}.
+    \label{fig:mom_distancias_80}
+\end{figure}
+
+
+Con $d = 0$, ambos portales quedan a la misma altura y las líneas equipotenciales permanecen rectas y horizontales, dado a que el potencial en este caso depende de la altura. A medida que $d$ crece, el campo se curva de forma visible a su alrededor la cual mantiene una zona conexa entre los dos portales con el mismo potencial, como se ve en los paneles $d = 40, 80, 120$ de ambas figuras en la sección \ref{sec:apendice} las figuras \ref{fig:mom_distancias} y \ref{fig:sor_distancias} para MOM y SOR respectivamente. Lo anterioir es de esperarse dado a que se impone que los portales deben tener el mimso potencial, evidenciando ademas que la presencia de los portales efectivamente debe afectar el campo para mantener la consistencia de este.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{campo_por_distancia_sor_0.png}
+    \caption{Misma escena y mismo esquema de color que la Figura \ref{fig:mom_distancias_0}, resuelta con SOR. A diferencia de MOM, SOR impone la igualdad de potencial promediando en cada iteración los valores de la máscara combinada de ambos portales para $d=0$.}
+    \label{fig:sor_distancias_0}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{campo_por_distancia_sor_80.png}
+    \caption{Misma escena y mismo esquema de color que la Figura \ref{fig:sor_distancias_0} siguiendo con SOR pero ahora con $d = 80$}
+    \label{fig:sor_distancias_80}
+\end{figure}
+
+
+Revisando el valor puntual de $\phi$ en el centro de cada portal, los dos solvers se comportan de forma distinta. En SOR, ambos centros terminan en el mismo valor hasta la precisión mostrada como es de esperarse. En MOM, en cambio, el residual entre ambos centros es pequeño pero crece con $d$: de $0.005$ para $d = 40$ a $0.011$ para $d = 80$ y $0.019$ para $d = 120$, es decir, entre un 0.5\% y un 2\% del rango total de $\phi$, lo que se atribuye a error computacional.
+
+\subsubsection{Segunda configuración}
+
+La figuras \ref{fig:potential_MOM} y \ref{fig:potential_SOR} muestran los mapas de potencial obtenidos con ambos métodos (MOM y SOR respectivamente) bajo la misma escala de color, normalizada al rango $[\varphi_{\min}^{\text{SOR}},\, \varphi_{\max}^{\text{SOR}}]$ para hacer la comparación directamente válida.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{comparassion_potential_MOM.png}
+    \caption{Distribución del potencial eléctrico $\varphi$ para el método de MOM 
+    Las líneas blancas son equipotenciales. Los portales naranja y azul
+    se ubican en $y = 80$ y $y = 120$ respectivamente.}
+    \label{fig:potential_MOM}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{comparassion_potential_SOR.png}
+    \caption{Misma escena y mismo esquema de color que la Figura \ref{fig:potential_MOM}, resuelta con SOR.}
+    \label{fig:potential_SOR}
+\end{figure}
+
+En ambos casos, las equipotenciales son horizontales y uniformemente espaciadas lejos de los portales, en acuerdo con el campo uniforme teórico. En la región comprendida entre los portales ($80 < y < 120$, $50 < x < 150$) las equipotenciales se aplanan notablemente, reflejo de que el \texttt{CouplePortal} iguala el potencial en ambas bocas, reduciendo el gradiente local. Ciertamente, ninguna equipotencial muestra un salto o discontinuidad al cruzar la frontera de los portales, lo que constituye evidencia directa de que
+la condición
+\begin{equation}
+    \varphi\big|_{S_1} = \varphi\big|_{S_2}
+\end{equation}
+se satisface numéricamente en ambos métodos. Se observa no obstante una
+diferencia cualitativa entre ellos: SOR produce equipotenciales más planas en la
+región entre los portales (campo más uniforme), mientras que MOM introduce
+mayor curvatura lateral, atribuible a la distribución de carga superficial
+$\sigma$ que el método calcula en los bordes de las superficies de frontera.
+
+Las Figuras \ref{fig:vel_sor} y \ref{fig:vel_MoM} muestran la evolución temporal de las componentes de velocidad de la carga de prueba para cada método. La línea vertical roja indica el frame en que ocurre la teletransportación.
+
+La componente $v_y$ crece de forma continua y prácticamente lineal en ambos métodos, tanto antes como después del evento de teletransportación. Esto implica que la aceleración en $y$ se mantiene constante al cruzar el portal, lo cual es consistente con un campo $E_y$ continuo a través de la frontera. En el límite de campo uniforme, la posición de la carga sigue una ley cuadrática $y(t) = y_0 + \frac{1}{2}\frac{q}{m}E_y\, t^2$, y la velocidad lineal $v_y(t) = \frac{q}{m}E_y\, t$. El ajuste visual de ambas curvas es consistente con esta dependencia.
+
+La componente $v_x$ merece atención particular. En SOR alcanza valores del orden de $10^{-4}$ grid units/frame, prácticamente despreciables frente a $v_y \sim 10^{-1}$ grid units/frame, lo que confirma que el campo generado por SOR es esencialmente unidireccional en $y$. En MOM, $v_x$ es comparable en orden de magnitud pero presenta una evolución más pronunciada y con signo negativo, indicando que el campo producido por MOM tiene una componente horizontal no nula que desplaza levemente la carga hacia la izquierda. Este comportamiento es coherente con la mayor curvatura de las equipotenciales observada en las figuras \ref{fig:potential_MOM} y \ref{fig:potential_SOR}.
+
+El pequeño desplazamiento visible en $|\vec{v}|$ y $v_y$ exactamente en el fotograma de teletransportación no es una discontinuidad física del campo, sino un artefacto de la implementación discreta del salto de posición; al trasladar la carga de $S_1$ a $S_2$ en un único paso temporal, el
+integrador de Velocity Verlet recalcula la aceleración en la nueva posición, produciendo un cambio brusco de un solo fotograma que no refleja ninguna discontinuidad en el potencial subyacente.
+
+
+\subsection{Conservación de la velocidad al atravesar un portal}
+
+Para verificar que el uso de un portal no altera la dinámica física de un objeto, se compararon dos objetos que caen dentro de la misma escena: uno atraviesa el par de portales durante su caída y el otro cae libremente sin interactuar con ningún portal. Ambos parten de la misma altura y, contando el desplazamiento efectivo producido por el teletransporte, atraviesan el mismo número de líneas equipotenciales en su trayecto. Si los portales no alteran la física del sistema, ambos deberían llegar con la misma rapidez al final de la simulación.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{equipotential_field_mom.png}
+    \caption{Escena de caída con dos objetos (cuadrados verdes, etiquetados
+    \emph{obj~1} y \emph{obj~2}) sobre el fondo de potencial resuelto con MOM.
+    \emph{Obj~1} cae a través del par de portales; \emph{obj~2} cae libremente
+    sin interactuar con ellos.}
+    \label{fig:campo_objetos_mom}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{equipotential_field_sor.png}
+    \caption{Misma escena de caída resuelta con SOR. La configuración de
+    objetos y portales es idéntica a la de la Figura~\ref{fig:campo_objetos_mom}.}
+    \label{fig:campo_objetos_sor}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{velocidad_MOM.png}
+    \caption{Rapidez absoluta $|v|$ (en unidades de grilla por frame) de
+    \emph{obj~1} (a través del portal) y \emph{obj~2} (caída libre) en
+    función del número de frame, resuelto con MOM.
+    El corte visible en la curva de \emph{obj~1} corresponde a las muestras
+    descartadas por contacto con el portal.}
+    \label{fig:velocidad1}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{velocidad_SOR.png}
+    \caption{Rapidez absoluta $|v|$ (en unidades de grilla por frame) de
+    \emph{obj~1} (a través del portal) y \emph{obj~2} (caída libre) en
+    función del número de frame, resuelto con SOR.
+    El corte visible en la curva de \emph{obj~1} corresponde a las muestras
+    descartadas por contacto con el portal.}
+    \label{fig:velocidad2}
+\end{figure}
+
+Las figuras \ref{fig:velocidad1} y \ref{fig:velocidad2} muestran la magnitud de la velocidad de ambos objetos en función del frame, para MOM y SOR, respectivamente. En la curva de \emph{obj~1} se ve un corte en el frame donde el objeto está en contacto con el portal; esa muestra se descarta explícitamente, ya que el salto de posición del centroide producido por el teletransporte no corresponde a una velocidad real.
+
+
+
+\subsection{Objeto oscilante entre portales}
+
+El último caso considerado retoma el mismo montaje de dos anclas de potencial
+(arriba $\phi = 1$, abajo $\phi = 0$) de las secciones anteriores, pero ahora con el par de portales enfrentados directamente uno con otro, como en el panel $d = 0$ de la Figura \ref{fig:mom_distancias_0}.
+
+La Figura~\ref{fig:gradiente_oscilante} muestra la magnitud del gradiente para esta escena: el campo es intenso cerca de las dos anclas, en los extremos superior e inferior, pero cae a un mínimo amplio y simétrico en la región entre los dos portales.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{campo_objeto_oscilante.png}
+    \caption{Magnitud del gradiente del campo, $|\nabla \phi|$, para la escena del objeto oscilante resuelta con MOM y método de las imágenes. El campo es fuerte cerca de las dos anclas de potencial (rojo, arriba y abajo) y cae a un mínimo amplio en la región central entre los dos portales (segmentos rojo y azul, con flecha de orientación), donde se ubica el objeto marcado como obj 1. Las flechas negras pequeñas indican la dirección del campo. Ejes en unidades de grilla.}
+    \label{fig:gradiente_oscilante}
+\end{figure}
+
+La Figura~\ref{fig:trayectoria_oscilante} muestra la trayectoria real de un conductor cargado ($q = 5$, $m = 0.5$) colocado en esa escena. El objeto cae desde el portal superior, atraviesa la región de campo débil, se acerca al portal inferior, se teletransporta de vuelta al superior y retoma la caída.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{trayectoria_objeto_oscilante.png}
+    \caption{Trayectoria del conductor cargado sobre el mismo fondo de potencial de la Figura~\ref{fig:gradiente_oscilante}, muestreada cada 20 frames de los 2080 de la grabación. El contorno del objeto en cada instante muestreado se colorea según un gradiente temporal (mapa de color \emph{plasma}, de morado en el primer frame a amarillo en el último), indicado en la barra lateral. La secuencia muestra al objeto cayendo desde el portal superior hasta el inferior y reapareciendo de nuevo arriba, en lugar de acelerar sin límite.}
+    \label{fig:trayectoria_oscilante}
+\end{figure}
+
+\subsection{Discontinuidad del campo atravez de los portales}
+
+Una incognita planteda por el docente era que ocurria en el caso donde existiran dos placas como el caso de un capacitor y se pusiese un portal entre ellos, que ocurria con el otro portal. Para esto se construyo una escena bastante amplia forma de poner un portal a cada extremo donde uno tendria el capacitor, sin condiciones de frontera para evitar artefactos en el calulo dejando un espacio moderado entre la simulacion y los bordes, esto se hizo solo para el caso de MOM ya que SOR era inviable por el largo de la simulacion.
+
+Se relizan 2 escernarios que se ven en las figuras n y m, el primero es el caso descrito de los capacitores donde se trunca el gap que se deja entre los dos portales y en el segundo se agrega una placa de potencial V=0 directament por destras del portal.
+
+\section{Análisis y Discusión}
+
+\subsection{Equipotenciales}
+
+\subsubsection*{Primera configuración}
+
+La igualdad de potencial entre ambos portales no se alcanza de forma perfecta ni uniforme sobre toda su superficie en ninguno de los dos solvers, es por esto que las equipotenciales no llegan a tocar ambos portales en todos los casos. En MOM la condición de potencial compartido se impone como una única incógnita para todo el par (ver \texttt{mom\_solver.py}), lo cual fija un valor agregado por segmento pero no garantiza que cada punto de la superficie quede exactamente al mismo potencial, y a eso se suma el problema de saturación numérica del sistema de MOM cuando el dominio crece. En SOR, cada iteración sobrescribe la máscara combinada de los dos portales con su valor promedio, pero las celdas vecinas actualizan su propio potencial en el mismo paso, de modo que ese promedio vuelve a desviarse ligeramente en la iteración siguiente. Cuanto más asimétrica es la posición relativa de los portales, más lenta resulta la convergencia.
+
+En las figuras de SOR (ie: \ref{fig:sor_distancias_80})se aprecian además dos pequeñas discontinuidades en forma de flecha en los extremos de cada portal. Este artefacto ocurre principalmente en el caso de SOR cuando se manejan bordes discontinuos en la máscara aunque tambien aparecen MOM, al forzar un valor único sobre una región con geometría no suave, el gradiente calculado por diferencias finitas oscila en los puntos donde la máscara termina de forma abrupta, ademas de que por construcion se toman los portales como objectos adimencionales por lo que al solo ocupar un pixel (el minimo posible) se generan estas discontinuidades.
+
+El hecho de que ambos portales deban terminar en el mismo potencial pese a ubicarse en regiones de potencial de fondo distinto, uno más cerca del ancla de $\phi = 1$ y el otro del ancla de $\phi = 0$, hace que se comporten en la práctica como un par de placas con carga opuesta: el portal ubicado en la región de mayor potencial cede carga negativa a su entorno para bajar su potencial hasta igualar al de su contraparte, y el otro hace lo inverso, como se llega a observar en la direcion del campo proximo al portal.
+
+El crecimiento del residual de MOM con $d$ (de $0.005$ a $0.019$) es consistente con la saturación numérica del sistema al crecer el dominio mencionada anteriormente, mientras que en SOR la imposición directa del promedio en cada iteración explica que no se observe un residual equivalente entre los centros de los portales.
+
+\subsubsection*{Segunda configuración}
+
+En las Figura \ref{fig:potential_MOM} y \ref{fig:potential_SOR} se expone la comparativa entre los dos métodos (MOM y SOR) implementados para simular la continuidad del potencial a través de los portales. Se muestra que ambos métodos reproducen cualitativamente el mismo campo; las líneas equipotenciales son horizontales y uniformemente espaciadas lejos de los portales, lo cual es consistente con el campo uniforme esperado entre dos \textit{anchors} de potencial fijo. La perturbación local introducida por los portales es también cualitativamente similar en ambos casos, las equipotenciales se doblan simétricamente alrededor de cada boca del portal y se ``aplanan´´ en la región entre ellos, reflejo de que el CouplePortal está igualando el potencial en ambas fronteras.
+
+El resultado más importante para el axioma es que en ninguno de los dos métodos las equipotenciales muestran un salto o discontinuidad al cruzar la frontera de los portales. Las líneas entran y salen de cada boca de forma continua, sin cortes abruptos ni bifurcaciones. Esto es evidencia directa de que la condición de continuidad del potencial se satisface numéricamente en ambos solvers.
+
+
+
+
+
+\subsection{Objeto oscilante entre portales}
+
+Si el efecto de los portales sobre el campo se ignorara y solo se los tratara como un atajo geométrico, un objeto colocado entre ambos caería siempre en la misma dirección del gradiente de fondo: cada vez que atravesara el par volvería a aparecer más arriba en potencial, ganando energía en cada ciclo sin límite. Eso no es lo que ocurre, porque el par de portales sí modifica el campo, tal como se resolvió con MOM en las secciones anteriores.
+
+Como se observa en la figura \ref{fig:gradiente_oscilante} La fuerza neta sobre el objeto en la región entre los dos portales no es uniforme teniendo dos posos de potencial, de modo que en lugar de acelerar indefinidamente el objeto encuentra las zonas de equilibrio que frenan su movimiento lo que lo lleva a oscila entre las dos bocas, como se ve en la figura \ref{fig:trayectoria_oscilante}. El mismo argumento de equilibrio, dado por la forma que toma el campo entre los portales acoplados y no por ningún detalle específico del método de solución, aplica igual bajo SOR.
+
+\subsection{Discontinuidad del campo a través de los portales}
+
+El profesor planteó la siguiente pregunta: si se coloca un portal entre las dos placas de un capacitor, ¿qué ocurre con su contraparte, el otro portal del par? Para responderla se construyó una escena con un portal en cada extremo: el primero (naranja) queda ubicado en el hueco entre las placas del capacitor, mientras que el segundo (celeste) se ubica lejos, en una zona sin ninguna otra fuente de potencial cerca. No se impuso ninguna condición de frontera adicional sobre el dominio, dejando además un margen amplio entre la simulación y los bordes para evitar artefactos de borde en el cálculo. La escena se resolvió únicamente con MOM, ya que el ancho necesario para separar ambos portales hace que SOR sea inviable por el número de iteraciones que requeriría.
+
+Se generaron dos versiones de esta escena, mostradas en las Figuras \ref{fig:capacitor_raw} y \ref{fig:capacitor_corrected}. En la primera, el portal lejano queda en una región completamente vacía y aun así queda expuesto a un potencial distinto de cero: el campo del portal encerrado entre las placas se transmite a su par a través del acople, sin que medie ningún objeto físico entre ambos. En la segunda versión se agrega, detrás de cada portal, un ancla de potencial fijo en $\phi=0$; con ese cambio el potencial transferido al portal lejano queda mucho más concentrado cerca de su propia posición, en lugar de extenderse de forma difusa por todo el espacio vacío alrededor.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\linewidth]{capacitor_mom_raw.png}
+    \caption{Campo equipotencial (MOM) de un capacitor de dos placas paralelas (anclas de potencial en $x=100$, $\phi=1$, y $x=200$, $\phi=0$) con un portal (naranja) en el hueco entre ambas, acoplado a un segundo portal (celeste) ubicado lejos, en una región sin ninguna otra fuente de potencial. El eje $x$ se recorta entre las dos zonas de interés para mostrar ambos portales en la misma figura sin perder escala. El portal lejano queda rodeado de equipotenciales incluso sin ningún objeto físico cerca, señal de que el potencial se transmite entre el par por el acople y no por el medio que los rodea.}
+    \label{fig:capacitor_raw}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\linewidth]{capacitor_mom_corrected.png}
+    \caption{Misma escena que la Figura \ref{fig:capacitor_raw}, con un ancla de potencial adicional fija en $\phi=0$ colocada justo detrás de cada portal. Las equipotenciales quedan más concentradas cerca de cada portal, y aparece una zona en $\phi=0$ inmediatamente detrás de ambos.}
+    \label{fig:capacitor_corrected}
+\end{figure}
+
+\section{Análisis}
+
+\subsection{Discontinuidad del campo a través de los portales}
+
+En ambas figuras el portal encerrado entre las placas está expuesto a un potencial distinto de cero, y ese potencial induce uno equivalente en su contraparte lejana a través del acople. La Figura \ref{fig:capacitor_raw} deja ver un problema con esto: el campo aparece alrededor del portal lejano sin que ocurra ningún cambio correspondiente en el portal del capacitor, y tanto un campo eléctrico como un potencial llevan asociada una energía. Sin un mecanismo que la compense, esa aparición de campo de la nada rompe la conservación de la energía.
+
+Como primera aproximación al problema, se probó colocar un ancla de potencial fija en $\phi=0$ justo detrás de cada portal, de forma que el potencial no lo atraviese sin sufrir ningún cambio en el proceso. La idea detrás de esto es que un portal es una deformación del espacio, y como tal debería poder impedir que lo que ocurre de un lado afecte directamente al otro. La Figura \ref{fig:capacitor_corrected} apoya esta idea: al agregar el ancla, las equipotenciales se concentran cerca de cada portal en lugar de dispersarse por todo el vacío, y queda una zona en $\phi=0$ justo detrás de cada uno. Este comportamiento es más compatible con la continuidad de la energía que el de la Figura \ref{fig:capacitor_raw}. Aun así, se trata solo de una primera aproximación: falta un tratamiento más formal antes de afirmar que resuelve el problema por completo.
+
+
+\section{Conclusiones}
+
+\begin{thebibliography}{9}
+
+\bibitem{pelicula}
+Emmerich, R. (Director). (1994). Stargate [Película]. MGM
+
+\bibitem{portales}
+Sheprut, I. (2025). A geometric theory of portals [Unpublished manuscript]. GitHub. https://github.com/optozorax
+
+\bibitem{wormholes}
+Visser, M. (1995). Lorentzian wormholes: From Einstein to Hawking. AIP Press.
+
+\bibitem{MoM_og}
+Harrington, R. F. (1993). Field computation by moment methods. IEEE Press.
+
+\bibitem{MoM}
+Mosig, J. R. (2024). Roger F. Harrington and the method of moments, part 1: Electrostatics. IEEE Antennas and Propagation Magazine, *66*(3), 58-70. \url{https://doi.org/10.1109/MAP.2024.3362249}
+
+\bibitem{WikipediaRelaxation}
+Wikipedia contributors. (2025). \textit{Relaxation (iterative method)}. Wikipedia, The Free Encyclopedia. Disponible en: \url{https://en.wikipedia.org/wiki/Relaxation_(iterative_method)}.
+
+\bibitem{ZinCin2026}
+ZinCin. (2026). \textit{Physics and Calculation Methods}. En \textit{Portal Gravity Electrostatics Engine}. GitHub. Disponible en: \url{https://github.com/thomatrixting/portal-gravity-electoestatics-engine}
+
+\bibitem{WikipediaGauge}
+Wikipedia contributors. (2025). \textit{Gauge theory}. Wikipedia, The Free Encyclopedia. Disponible en: \url{https://en.wikipedia.org/wiki/Gauge_theory}.
+
+\bibitem{Python}
+Python Software Foundation. (2025). \textit{Python}. Disponible en: \url{https://www.python.org/}.
+
+\bibitem{NumPy}
+NumPy Developers. (2025). \textit{NumPy}. Disponible en: \url{https://numpy.org/}.
+
+\bibitem{Pygame}
+Pygame Community. (2025). \textit{Pygame Documentation}. Disponible en: \url{https://www.pygame.org/docs/}.
+
+\end{thebibliography}
+
+
+
+\newpage
+
+\onecolumn
+\begin{appendices}
+    \section{Apéndice: Figuras Complementarias}
+
+    \renewcommand{\thefigure}{\thesection.\arabic{figure}}
+    \setcounter{figure}{0}
+    \label{sec:apendice}
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=1\linewidth]{campo_por_distancia_mom.png}
+        \caption{Potencial eléctrico (esquema de color \emph{Extra}, de azul en $\phi = 0$ a rojo en $\phi = 1$) resuelto con MOM para un par de portales acoplados (segmentos rojo y azul, con flecha indicando su orientación) separados verticalmente por $d = 0, 40, 80, 120$ unidades de grilla, sobre un fondo con ancla superior $\phi = 1$ y ancla inferior $\phi = 0$. Las líneas blancas finas son isolíneas de potencial y las flechas negras pequeñas representan el campo $-\nabla \phi$. Ejes en unidades de grilla, compartidos entre los cuatro paneles.}
+        \label{fig:mom_distancias}
+    \end{figure}
+
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{campo_por_distancia_sor.png}
+    \caption{Misma escena y mismo esquema de color que la Figura \ref{fig:mom_distancias}, resuelta con SOR. A diferencia de MOM, SOR impone la igualdad de potencial promediando en cada iteración los valores de la máscara combinada de ambos portales.}
+    \label{fig:sor_distancias}
+\end{figure}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{axiom_continuity_sor.png}
+    \caption{Velocidad de la carga de prueba implementando método SOR. La línea roja indica el evento de teletransportación.}
+    \label{fig:vel_sor}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{axiom_continuity_MoM.png}
+    \caption{Velocidad de la carga de prueba implementando método MoM.}
+    \label{fig:vel_MoM}
+\end{figure}
+
+\end{appendices}
+
+\end{document}

@@ -125,7 +125,7 @@ Built with `equipotential_scene()`: two falling objects on the same background, 
 
 <img alt="Image" src="https://github.com/user-attachments/assets/7e8a4e46-02e7-4954-8a73-d45a6e557ddc" />
 
-<img width="1042" height="591" alt="Image" src="https://github.com/user-attachments/assets/da6c3862-6efb-4250-864b-c88e7d5892cd" />
+<img alt="Image" src="https://github.com/user-attachments/assets/da6c3862-6efb-4250-864b-c88e7d5892cd" />
 
 Both objects reach the same final speed, under both solvers, once the teleport frame itself is excluded, meaning the portal does not add or remove energy from an object crossing it.
 
