@@ -46,7 +46,6 @@ def main() -> None:
     
     # sim = equipotential_scene(solver='mom')
     # sim = faling_object_scene()
-
     # sim = vertical_portals_many_objects_scene()
     # sim = test_portals_scene()  
     # sim = example_mom_carga_entre_portales()
@@ -60,8 +59,26 @@ def main() -> None:
     # sim = triple_portals()
     # sim = axiom_continuity_sor()
     # sim = axiom_continuity_mom()
-
-    # sim = triple_portals_mom()
+    #sim = triple_portals_mom()
+    #sim.run()
+    #sim = triple_portals_sor()
+    #sim.run()
+    #sim = flux_zero_test_scene('mom')
+    #sim.run()
+    #sim = flux_zero_test_scene('sor')
+    #sim.run()
+    #sim = triple_portal_flux_probes_scene('mom')
+    #sim.run()
+    #sim = triple_portal_flux_probes_scene('sor')
+    #sim.run()
+    #sim = falling_flux_scene('sor')
+    #sim.run()
+    #sim = falling_flux_scene('mom')
+    #sim.run()
+    #sim = object_at_portal_scene('sor')
+    #sim.run()    
+    #sim = object_at_portal_scene('mom')
+    #sim.run()
 
     sim.run()
 

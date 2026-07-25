@@ -318,20 +318,6 @@ def example_couple_circles() -> Simulation:
     )
 
 
-def triple_portals() -> Simulation:
-     W, H = 120, 100
-     p1 = Portal(RectangleMask(40, 60, 30, 30), (255, 0, 0))
-     p2 = Portal(RectangleMask(40, 60, 60, 60), (0, 255, 0))
-     p3 = Portal(RectangleMask(40, 60, 90, 90), (0, 0, 255))
-     return Simulation(
-         *_anchors(W, H), MultiPortal((p1, p2, p3)),
-         sim_width=W, sim_height=H,
-         px_scale=6,
-         iterations_per_frame=50,
-         sor_omega=1.8,
-         isoline_count=15,
-     )
-
 def triple_portals_mom() -> Simulation:
     W, H = 600, 500  # escalado x5 desde 120,100
 
@@ -345,6 +331,129 @@ def triple_portals_mom() -> Simulation:
         px_scale=1,
         isoline_count=15,
         solver_mode="mom",
+        show_vectors=True,
+        show_isolines=True,
+        color_mapper=extra_mapper(),
+    )
+
+def triple_portals_sor() -> Simulation:
+    """Misma geometría que triple_portals_mom(), en SOR, para comparar."""
+    W, H = 600, 500
+    p1 = Portal(RectangleMask(200, 300, 150, 150), (255, 0, 0))
+    p2 = Portal(RectangleMask(200, 300, 300, 300), (0, 255, 0))
+    p3 = Portal(RectangleMask(200, 300, 450, 450), (0, 0, 255))
+    return Simulation(
+        *_anchors(W, H), MultiPortal((p1, p2, p3)),
+        sim_width=W, sim_height=H,
+        px_scale=1,
+        iterations_per_frame=500,
+        sor_omega=1.8,
+        isoline_count=15,
+        solver_mode="sor",
+        show_vectors=True,
+        show_isolines=True,
+        color_mapper=extra_mapper(),
+    )
+
+def falling_flux_scene(solver='sor') -> Simulation:
+    """Misma escena que falling_flux_scene, reescalada x0.4 (200x200)."""
+    W, H = 200, 200
+    cx, cy = W // 2, H // 2
+    d = 40
+    r = 4
+    p1 = Portal(RectangleMask(cx-d, cx+d, d, d), (255, 0, 0), facing_positive=True)
+    p2 = Portal(RectangleMask(cx-d, cx+d, H-d, H-d), (0, 0, 255), facing_positive=False)
+
+    obs = MaterialObject(RectangleMask(cx-r, cx+r, cy-r, cy+r),
+                          color=(80, 220, 120), pinned=False, label="Objeto",
+                          active=True, charge=5.0, mass=0.5, show_flux=True)
+
+    return Simulation(
+        *_anchors(W, H), CouplePortal(p1, p2), obs,
+        sim_width=W, sim_height=H,
+        px_scale=5,
+        iterations_per_frame=500,
+        sor_omega=1.8,
+        isoline_count=15,
+        solver_mode=solver,
+        show_vectors=True,
+        show_isolines=True,
+        color_mapper=extra_mapper()
+    )
+
+def flux_zero_test_scene(solver='sor') -> Simulation:
+    """MaterialObject neutro y aislado (sin carga, lejos de portales)
+    para verificar que compute_flux() da ~0 en una región de vacío.
+    Escena reescalada x0.5 respecto a la versión 600x500."""
+    W, H = 300, 250
+    probe = MaterialObject(RectangleMask(W*0.7, W*0.7+30, H*0.4, H*0.4+30),
+                            pinned=True, label="Sonda vacío",
+                            show_flux=True, active=True)
+    return Simulation(
+        *_anchors(W, H), probe,
+        sim_width=W, sim_height=H, px_scale=2,
+        iterations_per_frame=500, sor_omega=1.8,
+        solver_mode=solver, mom_images=True,
+        show_vectors=True,
+        show_isolines=True,
+        color_mapper=extra_mapper(),
+    )
+
+
+def triple_portal_flux_probes_scene(solver='sor') -> Simulation:
+    """Triple portal + 4 sondas: una envolviendo cada portal individual
+    y una envolviendo el trío completo. Escena reescalada x0.5
+    respecto a la versión 600x500."""
+    W, H = 300, 250
+    p1 = Portal(RectangleMask(100, 150, 75, 75), (255, 0, 0))
+    p2 = Portal(RectangleMask(100, 150, 150, 150), (0, 255, 0))
+    p3 = Portal(RectangleMask(100, 150, 225, 225), (0, 0, 255))
+
+    margin = 6
+    probe1 = MaterialObject(RectangleMask(100-margin, 150+margin, 75-margin, 75+margin),
+                             pinned=True, label="Φ portal 1", show_flux=True)
+    probe2 = MaterialObject(RectangleMask(100-margin, 150+margin, 150-margin, 150+margin),
+                             pinned=True, label="Φ portal 2", show_flux=True)
+    probe3 = MaterialObject(RectangleMask(100-margin, 150+margin, 225-margin, 225+margin),
+                             pinned=True, label="Φ portal 3", show_flux=True)
+    probe_all = MaterialObject(RectangleMask(100-margin, 150+margin, 75-margin, 225+margin),
+                                pinned=True, label="Φ grupo total", show_flux=True)
+    return Simulation(
+        *_anchors(W, H), MultiPortal((p1, p2, p3)),
+        probe1, probe2, probe3, probe_all,
+        sim_width=W, sim_height=H, px_scale=4,
+        iterations_per_frame=500, sor_omega=1.8,
+        solver_mode=solver, mom_images=True,
+    )
+
+def object_at_portal_scene(solver='sor') -> Simulation:
+    """Objeto pinneado justo en la boca del portal (no cae, no lo cruza)
+    para ver el flujo Φ en esa posición exacta con Save Snapshot."""
+    W, H = 300, 300
+    cx, cy = W // 2, H // 2
+    d = 60
+    r = 10
+
+    p1 = Portal(RectangleMask(cx-d, cx+d, d, d), (255, 0, 0), facing_positive=True)
+    p2 = Portal(RectangleMask(cx-d, cx+d, H-d, H-d), (0, 0, 255), facing_positive=False)
+
+    # Pegado a la cara de trabajo de p1, sin tocar la región "back" que
+    # dispara el teletransporte (Portal.back_region_mask).
+    obs = MaterialObject(RectangleMask(cx-r, cx+r, d-2*r, d),
+                          color=(80, 220, 120), pinned=True, label="Objeto",
+                          active=True, charge=5.0, mass=0.5, show_flux=True)
+
+    return Simulation(
+        *_anchors(W, H), CouplePortal(p1, p2), obs,
+        sim_width=W, sim_height=H,
+        px_scale=3,
+        iterations_per_frame=500,
+        sor_omega=1.8,
+        isoline_count=15,
+        solver_mode=solver,
+        show_vectors=True,
+        show_isolines=True,
+        color_mapper=extra_mapper()
     )
 
 def example_mom_conductor():

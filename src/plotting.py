@@ -46,7 +46,7 @@ _ISOLINE_ALPHA = 80 / 255                        # matches simulation.py:_render
 _FILL_ALPHA = 210 / 255                          # matches simulation.py:_build_portal_render_cache
 _ARROW_LEN = 6.0                                 # grid units, matches _render_portal_arrows
 
-_FINAL_PLOTS_DIR = Path("/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/final_plots")
+_FINAL_PLOTS_DIR = Path("/home/tomas/Documentos/portal-gravity-electoestatics-engine/output/final_plots")
 _FINAL_PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -642,6 +642,289 @@ def plot_equipotencial_scene(show = True):
     plot_equipotencial_field_sor(show=show)
     plot_velocities_comparison(show=show)
 
+def _flux_from_mask(mask: np.ndarray, grad_x: np.ndarray, grad_y: np.ndarray,
+                     portals_mask: np.ndarray) -> float:
+    """Réplica offline de MaterialObject.compute_flux (portals.py), operando
+    sobre máscaras ya evaluadas del snapshot en vez de un objeto vivo."""
+    m = mask.astype(np.float64)
+    if not np.any(m):
+        return 0.0
+    dmy, dmx = np.gradient(m)
+    nx, ny = -dmx, -dmy
+    norm = np.hypot(nx, ny)
+    boundary = (norm > 1e-9) & (m > 0.5) & ~portals_mask
+    if not np.any(boundary):
+        return 0.0
+    nx_b, ny_b = nx[boundary] / norm[boundary], ny[boundary] / norm[boundary]
+    Ex, Ey = -grad_x[boundary], -grad_y[boundary]
+    return float(np.sum(Ex * nx_b + Ey * ny_b))
+
+
+def _portals_mask_from_meta(data, meta) -> np.ndarray:
+    """Reconstruye la máscara de portales (para excluir del flujo), igual
+    que Simulation._portals_mask pero desde el JSON exportado."""
+    mask = np.zeros_like(data["potential"], dtype=bool)
+    for obj in meta["pinned_objects"]:
+        if obj["type"] in ("Portal", "FixedPotentialPortal"):
+            mask |= data[obj["array_key"]]
+    dilated = mask.copy()
+    dilated[1:, :]  |= mask[:-1, :]
+    dilated[:-1, :] |= mask[1:, :]
+    dilated[:, 1:]  |= mask[:, :-1]
+    dilated[:, :-1] |= mask[:, 1:]
+    return dilated
+
+def plot_triple_portal_scene(show: bool = True):
+    """1x2: equipotencial del triple portal, MOM vs SOR."""
+    base = Path("/home/tomas/Documentos/portal-gravity-electoestatics-engine/output/triple_portals")
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    plot_field(base / "snapshot_mom_triple.npz", scheme="Extra",
+               show_isolines=True, show_vectors=True, ax=axes[0], show=False,
+               title="Triple portal - MOM")
+    plot_field(base / "snapshot_sor_triple.npz", scheme="Extra",
+               show_isolines=True, show_vectors=True, ax=axes[1], show=False,
+               title="Triple portal - SOR")
+    plt.tight_layout()
+    fig.savefig(str(_FINAL_PLOTS_DIR / "triple_portal_mom_vs_sor.png"), dpi=150, bbox_inches="tight")
+    if show:
+        plt.show()
+    return fig
+
+
+def plot_material_flux_zero_test(show: bool = True):
+    """1x2: sonda neutra aislada, Φ anotado sobre el campo, MOM vs SOR."""
+    base = Path("/home/tomas/Documentos/portal-gravity-electoestatics-engine/output/flux_zero_test")
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    for ax, tag in zip(axes, ["mom", "sor"]):
+        data, meta = _load(base / f"snapshot_{tag}_flux_zero.npz")
+        portals_mask = _portals_mask_from_meta(data, meta)
+        probe = next(o for o in meta["pinned_objects"] if o["type"] == "MaterialObject")
+        flux = _flux_from_mask(data[probe["array_key"]], data["grad_x"], data["grad_y"], portals_mask)
+        plot_field(base / f"snapshot_{tag}_flux_zero.npz", scheme="Extra", ax=ax, show=False,
+                   title=f"{tag.upper()}:  \u03a6 = {flux:+.4e}")
+    plt.tight_layout()
+    fig.savefig(str(_FINAL_PLOTS_DIR / "flux_zero_test.png"), dpi=150, bbox_inches="tight")
+    if show:
+        plt.show()
+    return fig
+
+
+def plot_triple_portal_flux(show: bool = True):
+    """Φ por portal individual + Φ del grupo completo, MOM vs SOR,
+    mostrando la discrepancia Φ1+Φ2+Φ3 vs Φ_total."""
+    base = Path("/home/tomas/Documentos/portal-gravity-electoestatics-engine/output/triple_portal_flux")
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    for ax, tag in zip(axes, ["mom", "sor"]):
+        data, meta = _load(base / f"snapshot_{tag}_triple_flux.npz")
+        portals_mask = _portals_mask_from_meta(data, meta)
+        probes = {o["label"]: data[o["array_key"]]
+                  for o in meta["pinned_objects"] if o["type"] == "MaterialObject"}
+        fluxes = {label: _flux_from_mask(m, data["grad_x"], data["grad_y"], portals_mask)
+                  for label, m in probes.items()}
+        suma = fluxes["\u03a6 portal 1"] + fluxes["\u03a6 portal 2"] + fluxes["\u03a6 portal 3"]
+        total = fluxes.get("Φ grupo total", sum(fluxes.values()))
+        ax.bar(list(fluxes.keys()), list(fluxes.values()))
+        ax.set_title(f"{tag.upper()}   |\u03a3-total| = {abs(suma-total):.3e}")
+        ax.tick_params(axis='x', rotation=20)
+        ax.axhline(0, color="black", linewidth=0.8)
+    plt.tight_layout()
+    fig.savefig(str(_FINAL_PLOTS_DIR / "triple_portal_flux_discrepancy.png"), dpi=150, bbox_inches="tight")
+    if show:
+        plt.show()
+    return fig
+
+    base = Path("/home/tomas/Documentos/portal-gravity-electoestatics-engine/output/object_at_portal")
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    for ax, tag in zip(axes, ["mom", "sor"]):
+        data, meta = _load(base / f"snapshot_{tag}_at_portal.npz")
+        portals_mask = _portals_mask_from_meta(data, meta)
+        probe = next(o for o in meta["pinned_objects"] if o["type"] == "MaterialObject")
+        flux = _flux_from_mask(data[probe["array_key"]], data["grad_x"], data["grad_y"], portals_mask)
+        plot_field(base / f"snapshot_{tag}_at_portal.npz", scheme="Extra", ax=ax, show=False,
+                   title=f"{tag.upper()}:  \u03a6 = {flux:+.4e}")
+    plt.tight_layout()
+    fig.savefig(str(_FINAL_PLOTS_DIR / "flux_at_portal.png"), dpi=150, bbox_inches="tight")
+    if show:
+        plt.show()
+    return fig
+def _flux_series_from_recording(data, meta, obj_index: int = 0):
+    """Φ(t) para el material_object obj_index a lo largo de toda la
+    grabación. El campo (grad_x/grad_y) se capturó una sola vez al iniciar
+    la grabación, así que se reutiliza el mismo para cada frame."""
+    portals_mask = _portals_mask_from_meta(data, meta)
+    obj_meta = meta["material_objects"][obj_index]
+    stack = data[obj_meta["array_key"]]          # (n_frames, H, W)
+    grad_x, grad_y = data["grad_x"], data["grad_y"]
+    n = stack.shape[0]
+    flux = np.full(n, np.nan)
+    for t in range(n):
+        flux[t] = _flux_from_mask(stack[t], grad_x, grad_y, portals_mask)
+    return flux, obj_meta
+def render_flux_video(recording_path, save_path=None, obj_index: int = 0,
+                      field: str = "potential", scheme: str = "Extra",
+                      show_isolines: bool = True, isoline_count: int = 10,
+                      every_n_frames: int = 1, fps: int = 20, dpi: int = 120):
+    """Video del objeto cayendo, con Φ recalculado y anotado cuadro a
+    cuadro sobre el campo estático capturado al iniciar la grabación."""
+    import matplotlib.animation as animation
+
+    data, meta = _load(recording_path)
+    if meta.get("kind") != "recording":
+        raise ValueError("render_flux_video expects a recording_*.npz/.json file")
+
+    flux, obj_meta = _flux_series_from_recording(data, meta, obj_index)
+    portals_mask = _portals_mask_from_meta(data, meta)
+    stack = data[obj_meta["array_key"]]
+    n_frames = stack.shape[0]
+    idxs = list(range(0, n_frames, max(1, every_n_frames)))
+    if idxs[-1] != n_frames - 1:
+        idxs.append(n_frames - 1)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    rgb = _render_background(ax, data, field, scheme, show_isolines,
+                             isoline_count, False, 10)
+    _draw_pinned_objects(ax, data, meta, rgb)
+    ax.set_xlabel("x (grid)")
+    ax.set_ylabel("y (grid)")
+
+    txt = ax.text(0.02, 0.97, "", transform=ax.transAxes, fontsize=12,
+                  va="top", ha="left", color="white",
+                  bbox=dict(facecolor="black", alpha=0.6, pad=4))
+    state = {"artist": None}
+
+    def _clear():
+        if state["artist"] is not None:
+            try:
+                state["artist"].remove()
+            except (AttributeError, NotImplementedError):
+                for coll in getattr(state["artist"], "collections", []):
+                    coll.remove()
+            state["artist"] = None
+
+    def update(t):
+        _clear()
+        mask = stack[t]
+        if np.any(mask):
+            state["artist"] = ax.contourf(mask.astype(float), levels=[0.5, 1.5],
+                                          colors=[(0.3, 0.9, 0.4)], alpha=0.8)
+        touching = bool(np.any(mask & portals_mask))
+        nota = " (contacto con portal)" if touching else ""
+        txt.set_text(f"frame {t}\n\u03a6 = {flux[t]:+.3f}{nota}")
+        return [txt]
+
+    anim = animation.FuncAnimation(fig, update, frames=idxs, blit=False)
+
+    if save_path is None:
+        save_path = str(_FINAL_PLOTS_DIR / "falling_flux.mp4")
+    try:
+        anim.save(save_path, fps=fps, dpi=dpi, writer="ffmpeg")
+    except Exception:
+        save_path = str(Path(save_path).with_suffix(".gif"))
+        anim.save(save_path, fps=fps, dpi=dpi, writer="pillow")
+
+    plt.close(fig)
+    print(f"[plotting] video guardado en {save_path}")
+    return save_path
+    
+def plot_flux_trajectory(recording_path, obj_index: int = 0, every_n_frames: int = 5,
+                         field: str = "potential", scheme: str = "Extra", cmap: str = "coolwarm",
+                         show_isolines: bool = True, isoline_count: int = 10,
+                         title: Optional[str] = None, save_path: Optional[str] = None,
+                         show: bool = True):
+    """Izquierda: trayectoria sobre el campo, coloreada por Φ en cada punto
+    muestreado. Derecha: Φ vs frame (cuadros de contacto con portal
+    descartados, igual que en plot_velocities)."""
+    data, meta = _load(recording_path)
+    if meta.get("kind") != "recording":
+        raise ValueError("plot_flux_trajectory expects a recording_*.npz/.json file")
+
+    flux, obj_meta = _flux_series_from_recording(data, meta, obj_index)
+    portals_mask = _portals_mask_from_meta(data, meta)
+    stack = data[obj_meta["array_key"]]
+    pos = _centroid_trajectory(stack)
+    contact = _contact_frames(portals_mask, mask_stack=stack)
+
+    n = stack.shape[0]
+    idxs = list(range(0, n, max(1, every_n_frames)))
+    if idxs[-1] != n - 1:
+        idxs.append(n - 1)
+
+    fig, (ax_traj, ax_flux) = plt.subplots(1, 2, figsize=(15, 6),
+                                           gridspec_kw={"width_ratios": [1.3, 1]})
+
+    rgb = _render_background(ax_traj, data, field, scheme, show_isolines,
+                             isoline_count, False, 10)
+    _draw_pinned_objects(ax_traj, data, meta, rgb)
+
+    finite = flux[~np.isnan(flux)]
+    vmax = np.max(np.abs(finite)) if finite.size else 1.0
+    norm = plt.Normalize(vmin=-vmax, vmax=vmax)
+    colormap = mpl.colormaps[cmap]
+
+    sampled_pos, sampled_flux = pos[idxs], flux[idxs]
+    valid = ~np.isnan(sampled_pos[:, 0])
+    sc = ax_traj.scatter(sampled_pos[valid, 0], sampled_pos[valid, 1],
+                         c=sampled_flux[valid], cmap=colormap, norm=norm,
+                         s=35, edgecolors="black", linewidths=0.4)
+    divider = make_axes_locatable(ax_traj)
+    cax = divider.append_axes("right", size="4%", pad=0.15)
+    plt.colorbar(sc, cax=cax, label="\u03a6 (flujo)")
+    ax_traj.set_title("Trayectoria coloreada por flujo")
+    ax_traj.set_xlabel("x (grid)")
+    ax_traj.set_ylabel("y (grid)")
+
+    flux_plot = flux.copy()
+    bad = contact.copy()
+    bad[:-1] |= contact[1:]
+    bad[1:] |= contact[:-1]
+    flux_plot[bad] = np.nan
+    ax_flux.plot(np.arange(n), flux_plot, color="tab:red")
+    ax_flux.axhline(0, color="black", linewidth=0.8)
+    ax_flux.set_title("\u03a6 vs frame")
+    ax_flux.set_xlabel("frame")
+    ax_flux.set_ylabel("\u03a6 (flujo)")
+    ax_flux.grid(True)
+
+    if title:
+        fig.suptitle(title)
+    plt.tight_layout()
+
+    if save_path is None:
+        save_path = str(_FINAL_PLOTS_DIR / "flux_trajectory.png")
+    fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    if show:
+        plt.show()
+    return fig
+
+def plot_flux_at_portal(show: bool = True):
+    base = Path("/home/tomas/Documentos/portal-gravity-electoestatics-engine/output/object_at_portal")
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    for ax, tag in zip(axes, ["mom", "sor"]):
+        data, meta = _load(base / f"snapshot_{tag}_at_portal.npz")
+        portals_mask = _portals_mask_from_meta(data, meta)
+        probe = next(o for o in meta["pinned_objects"] if o["type"] == "MaterialObject")
+        flux = _flux_from_mask(data[probe["array_key"]], data["grad_x"], data["grad_y"], portals_mask)
+        plot_field(base / f"snapshot_{tag}_at_portal.npz", scheme="Extra", ax=ax, show=False,
+                   title=f"{tag.upper()}:  \u03a6 = {flux:+.4e}")
+    plt.tight_layout()
+    fig.savefig(str(_FINAL_PLOTS_DIR / "flux_at_portal.png"), dpi=150, bbox_inches="tight")
+    if show:
+        plt.show()
+    return fig
+
 
 if __name__ == "__main__":
     plot_equipotencial_scene(show=True)
+    
+    '''
+    plot_triple_portal_scene(show=False)
+    plot_material_flux_zero_test(show=False)
+    plot_triple_portal_flux(show=False)
+    plot_flux_at_portal(show=False)
+    render_flux_video("/home/tomas/Documentos/portal-gravity-electoestatics-engine/output/falling_flux/recording_mom_falling.npz",
+                       save_path=str(_FINAL_PLOTS_DIR / "falling_flux_mom.mp4"))
+    plot_flux_trajectory("/home/tomas/Documentos/portal-gravity-electoestatics-engine/output/falling_flux/recording_mom_falling.npz",
+                          title="Flujo durante la caída - MOM",
+                          save_path=str(_FINAL_PLOTS_DIR / "flux_trajectory_mom.png"))
+    '''
+
