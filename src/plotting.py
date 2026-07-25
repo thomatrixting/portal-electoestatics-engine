@@ -100,6 +100,18 @@ def _draw_vectors(ax, grad_x: np.ndarray, grad_y: np.ndarray, step: int, magnitu
     xs_grid, ys_grid = np.meshgrid(xs, ys)
     ax.quiver(xs_grid, ys_grid, gx, gy, color=[_VECTOR_COLOR], angles="xy", scale=magnitude)
 
+def _wire_format_coord(ax, arr: np.ndarray, field: str) -> None:
+    """Cursor readout shows the underlying scalar field value, not the
+    color-mapped RGB triplet imshow would report by default."""
+    H, W = arr.shape
+
+    def format_coord(x: float, y: float) -> str:
+        ix, iy = int(round(x)), int(round(y))
+        if 0 <= iy < H and 0 <= ix < W:
+            return f"x={x:.1f} y={y:.1f} {field}={arr[iy, ix]:.4f}"
+        return f"x={x:.1f} y={y:.1f}"
+
+    ax.format_coord = format_coord
 
 def _wire_format_coord(ax, arr: np.ndarray, field: str) -> None:
     """Cursor readout shows the underlying scalar field value, not the
@@ -635,6 +647,12 @@ def _plot_speed_into_ax(ax, recording_path, every_n_frames: int = 50) -> None:
         vx = np.gradient(sampled[:, 0], frames)
         vy = np.gradient(sampled[:, 1], frames)
         speed = np.hypot(vx, vy)
+
+        if max_value is not None:
+            bad_values = speed > max_value
+            vx[bad_values] = np.nan
+            vy[bad_values] = np.nan
+            speed[bad_values] = np.nan
 
         if contact is not None:
             contact_sampled = contact[idxs]

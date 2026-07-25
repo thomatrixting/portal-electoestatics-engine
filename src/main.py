@@ -40,12 +40,31 @@ def equipotencials_closeportals_falling():
     #sim = falling_object_scene(solver='sor',pinned=True)
     #sim = capacitor_scene()
     #sim = capacitor_scene_corrected()
-    sim.run()
-
 
 def main() -> None:
     equipotencials_closeportals_falling()
-    #TODO organize scenes when everyone uploads them
+    
+    # sim = equipotential_scene(solver='mom')
+    #sim = faling_object_scene()
+
+    #sim = vertical_portals_many_objects_scene()
+    #sim = test_portals_scene()  
+    #sim = example_mom_carga_entre_portales()
+    #sim.run()
+    #sim = example_mom_cargas_afuera()
+    #sim.run()
+    #sim = example_mom_couple()
+    #sim.run()
+    #sim = example_mom()
+    #sim = test_portals_scene()
+    #sim = test_gradient()
+    # sim = example_portal_on_capacitor()
+    #sim = example_couple_portals()  # Starting scene
+    #sim = triple_portals()
+    sim = axiom_continuity_sor()
+    # sim = axiom_continuity_mom()
+
+    sim.run()
 
 
 if __name__ == "__main__":
