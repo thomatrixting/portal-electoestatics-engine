@@ -786,11 +786,7 @@ La Figura~\ref{fig:trayectoria_oscilante} muestra la trayectoria real de un cond
     \label{fig:trayectoria_oscilante}
 \end{figure}
 
-\subsection{Discontinuidad del campo atravez de los portales}
 
-Una incognita planteda por el docente era que ocurria en el caso donde existiran dos placas como el caso de un capacitor y se pusiese un portal entre ellos, que ocurria con el otro portal. Para esto se construyo una escena bastante amplia forma de poner un portal a cada extremo donde uno tendria el capacitor, sin condiciones de frontera para evitar artefactos en el calulo dejando un espacio moderado entre la simulacion y los bordes, esto se hizo solo para el caso de MOM ya que SOR era inviable por el largo de la simulacion.
-
-Se relizan 2 escernarios que se ven en las figuras n y m, el primero es el caso descrito de los capacitores donde se trunca el gap que se deja entre los dos portales y en el segundo se agrega una placa de potencial V=0 directament por destras del portal.
 
 \section{Análisis y Discusión}
 
@@ -800,7 +796,8 @@ Se relizan 2 escernarios que se ven en las figuras n y m, el primero es el caso 
 
 La igualdad de potencial entre ambos portales no se alcanza de forma perfecta ni uniforme sobre toda su superficie en ninguno de los dos solvers, es por esto que las equipotenciales no llegan a tocar ambos portales en todos los casos. En MOM la condición de potencial compartido se impone como una única incógnita para todo el par (ver \texttt{mom\_solver.py}), lo cual fija un valor agregado por segmento pero no garantiza que cada punto de la superficie quede exactamente al mismo potencial, y a eso se suma el problema de saturación numérica del sistema de MOM cuando el dominio crece. En SOR, cada iteración sobrescribe la máscara combinada de los dos portales con su valor promedio, pero las celdas vecinas actualizan su propio potencial en el mismo paso, de modo que ese promedio vuelve a desviarse ligeramente en la iteración siguiente. Cuanto más asimétrica es la posición relativa de los portales, más lenta resulta la convergencia.
 
-En las figuras de SOR (ie: \ref{fig:sor_distancias_80})se aprecian además dos pequeñas discontinuidades en forma de flecha en los extremos de cada portal. Este artefacto ocurre principalmente en el caso de SOR cuando se manejan bordes discontinuos en la máscara aunque tambien aparecen MOM, al forzar un valor único sobre una región con geometría no suave, el gradiente calculado por diferencias finitas oscila en los puntos donde la máscara termina de forma abrupta, ademas de que por construcion se toman los portales como objectos adimencionales por lo que al solo ocupar un pixel (el minimo posible) se generan estas discontinuidades.
+En las figuras de SOR (ie: \ref{fig:sor_distancias_80})se aprecian además dos pequeñas discontinuidades en forma de flecha en los extremos de cada portal. Este artefacto ocurre principalmente en el caso de SOR cuando se manejan bordes discontinuos en la máscara aunque también aparecen MOM, al forzar un valor único sobre una región con geometría no suave, el gradiente calculado por diferencias finitas oscila en los puntos donde la máscara termina de forma abrupta, además de que por construcción se toman los portales como objetos adimensionales por lo que al solo ocupar un pixel (el mínimo posible) se generan estas discontinuidades.
+
 
 El hecho de que ambos portales deban terminar en el mismo potencial pese a ubicarse en regiones de potencial de fondo distinto, uno más cerca del ancla de $\phi = 1$ y el otro del ancla de $\phi = 0$, hace que se comporten en la práctica como un par de placas con carga opuesta: el portal ubicado en la región de mayor potencial cede carga negativa a su entorno para bajar su potencial hasta igualar al de su contraparte, y el otro hace lo inverso, como se llega a observar en la direcion del campo proximo al portal.
 
@@ -827,20 +824,6 @@ Como se observa en la figura \ref{fig:gradiente_oscilante} La fuerza neta sobre 
 El profesor planteó la siguiente pregunta: si se coloca un portal entre las dos placas de un capacitor, ¿qué ocurre con su contraparte, el otro portal del par? Para responderla se construyó una escena con un portal en cada extremo: el primero (naranja) queda ubicado en el hueco entre las placas del capacitor, mientras que el segundo (celeste) se ubica lejos, en una zona sin ninguna otra fuente de potencial cerca. No se impuso ninguna condición de frontera adicional sobre el dominio, dejando además un margen amplio entre la simulación y los bordes para evitar artefactos de borde en el cálculo. La escena se resolvió únicamente con MOM, ya que el ancho necesario para separar ambos portales hace que SOR sea inviable por el número de iteraciones que requeriría.
 
 Se generaron dos versiones de esta escena, mostradas en las Figuras \ref{fig:capacitor_raw} y \ref{fig:capacitor_corrected}. En la primera, el portal lejano queda en una región completamente vacía y aun así queda expuesto a un potencial distinto de cero: el campo del portal encerrado entre las placas se transmite a su par a través del acople, sin que medie ningún objeto físico entre ambos. En la segunda versión se agrega, detrás de cada portal, un ancla de potencial fijo en $\phi=0$; con ese cambio el potencial transferido al portal lejano queda mucho más concentrado cerca de su propia posición, en lugar de extenderse de forma difusa por todo el espacio vacío alrededor.
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.9\linewidth]{capacitor_mom_raw.png}
-    \caption{Campo equipotencial (MOM) de un capacitor de dos placas paralelas (anclas de potencial en $x=100$, $\phi=1$, y $x=200$, $\phi=0$) con un portal (naranja) en el hueco entre ambas, acoplado a un segundo portal (celeste) ubicado lejos, en una región sin ninguna otra fuente de potencial. El eje $x$ se recorta entre las dos zonas de interés para mostrar ambos portales en la misma figura sin perder escala. El portal lejano queda rodeado de equipotenciales incluso sin ningún objeto físico cerca, señal de que el potencial se transmite entre el par por el acople y no por el medio que los rodea.}
-    \label{fig:capacitor_raw}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.9\linewidth]{capacitor_mom_corrected.png}
-    \caption{Misma escena que la Figura \ref{fig:capacitor_raw}, con un ancla de potencial adicional fija en $\phi=0$ colocada justo detrás de cada portal. Las equipotenciales quedan más concentradas cerca de cada portal, y aparece una zona en $\phi=0$ inmediatamente detrás de ambos.}
-    \label{fig:capacitor_corrected}
-\end{figure}
 
 \section{Análisis}
 

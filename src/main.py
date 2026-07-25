@@ -24,48 +24,73 @@ Controls:
   SCENE tab - scene objects, add, presets, inspector
 
 See README.md for details
-"""
 
+Each function below runs the scene(s) used for one subsection of the
+"Resultados" section of explanation/report.tex, so the report and the
+code stay traceable to each other.
+"""
 
 from scenes import *
 
-def equipotencials_closeportals_falling():
-    #sim = equipotential_scene(solver='sor')
-    #sim = close_portals_scene(solver='sor', distance_portals=120)
-    #sim = close_portals_scene(solver='sor', distance_portals=80)
-    #sim = close_portals_scene(solver='sor', distance_portals=40)
-    #sim = close_portals_scene(solver='mom', distance_portals=0)
-    #sim = falling_object_scene(solver='sor',pinned=True)
-    sim = falling_object_scene(solver='mom',pinned=False)
-    #sim = falling_object_scene(solver='sor',pinned=True)
-    #sim = capacitor_scene()
-    #sim = capacitor_scene_corrected()
+
+# --- 4.1 Equipotenciales ------------------------------------------------
+
+def equipotenciales_primera_configuracion(solver='mom', distance_portals=80) -> None:
+    """4.1.1 Primera configuración: par de portales acoplados sobre un
+    fondo de gradiente vertical uniforme, variando la separación vertical
+    d entre sus centros (figuras campo_por_distancia_{mom,sor}_{0,40,80,120})."""
+    #sim = close_portals_scene(solver=solver, distance_portals=0)
+    #sim = close_portals_scene(solver=solver, distance_portals=40)
+    #sim = close_portals_scene(solver=solver, distance_portals=80)
+    sim = close_portals_scene(solver=solver, distance_portals=distance_portals)
     sim.run()
 
+
+def equipotenciales_segunda_configuracion(solver='mom') -> None:
+    """4.1.2 Segunda configuración: portales enfrentados en y=80 y y=120
+    con una carga de prueba que se teletransporta (figuras potential_MOM,
+    potential_SOR, vel_sor, vel_MoM)."""
+    sim = axiom_continuity_mom() if solver == 'mom' else axiom_continuity_sor()
+    sim.run()
+
+
+# --- 4.2 Conservación de la velocidad al atravesar un portal -----------
+
+def conservacion_velocidad(solver='mom', pinned=True) -> None:
+    """Dos objetos que caen en la misma escena: uno atraviesa el par de
+    portales y el otro cae libremente, para comparar su rapidez final
+    (figuras equipotential_field_{mom,sor}, velocidad_{MOM,SOR})."""
+    sim = equipotential_scene(solver=solver, pinned=pinned)
+    sim.run()
+
+
+# --- 4.3 Objeto oscilante entre portales --------------------------------
+
+def objeto_oscilante(solver='mom', pinned=False) -> None:
+    """Portales enfrentados directamente (d=0) con un conductor cargado
+    (q=5, m=0.5) que oscila entre las dos bocas por la zona de equilibrio
+    del campo (figuras campo_objeto_oscilante, trayectoria_objeto_oscilante)."""
+    sim = falling_object_scene(solver=solver, pinned=pinned)
+    sim.run()
+
+
+# --- 4.4 Discontinuidad del campo a través de los portales -------------
+
+def discontinuidad_capacitor(corrected=False) -> None:
+    """Portal entre las placas de un capacitor acoplado a un portal lejano
+    en el vacío, sin (raw) y con (corrected) ancla de potencial fija detrás
+    de cada boca (figuras capacitor_raw, capacitor_corrected). Solo MOM,
+    el ancho necesario hace inviable SOR."""
+    sim = capacitor_scene_corrected() if corrected else capacitor_scene()
+    sim.run()
+
+
 def main() -> None:
-    equipotencials_closeportals_falling()
-    
-    # sim = equipotential_scene(solver='mom')
-    #sim = faling_object_scene()
-
-    #sim = vertical_portals_many_objects_scene()
-    #sim = test_portals_scene()  
-    #sim = example_mom_carga_entre_portales()
-    #sim.run()
-    #sim = example_mom_cargas_afuera()
-    #sim.run()
-    #sim = example_mom_couple()
-    #sim.run()
-    #sim = example_mom()
-    #sim = test_portals_scene()
-    #sim = test_gradient()
-    # sim = example_portal_on_capacitor()
-    #sim = example_couple_portals()  # Starting scene
-    #sim = triple_portals()
-    #sim = axiom_continuity_sor()
-    # sim = axiom_continuity_mom()
-
-    #sim.run()
+    equipotenciales_primera_configuracion(solver='mom', distance_portals=80)
+    #equipotenciales_segunda_configuracion(solver='mom')
+    #conservacion_velocidad(solver='mom')
+    #objeto_oscilante(solver='mom')
+    #discontinuidad_capacitor(corrected=False)
 
 
 if __name__ == "__main__":
