@@ -2,4 +2,5 @@ explanation/translated-pdfs/explanation_v2-dual.pdf
 src/__pycache__/
 *.log
 output/
+results_continuity/
 
