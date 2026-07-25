@@ -113,8 +113,9 @@ A few of the predefined scenes in `scenes.py` were used to check that the portal
 
 Built with `close_portals_scene(solver=..., distance_portals=...)`, sweeping the vertical separation between two facing portals (`d = 0, 40, 80, 120`) on a uniform background field (top anchor φ=1, bottom φ=0).
 
-![MOM field by distance](output/final_plots/campo_por_distancia_mom.png)
-![SOR field by distance](output/final_plots/campo_por_distancia_sor.png)
+<img alt="Image" src="https://github.com/user-attachments/assets/c162d962-2c57-49ac-8ef0-82ed2e7ba25f"/>
+
+<img  alt="Image" src="https://github.com/user-attachments/assets/4f9e6d9b-1bd8-4d0a-907a-498e7ac4dc06" />
 
 Both solvers force the portal pair to a common potential, as expected from the `CouplePortal` coupling. SOR matches to full precision; MOM leaves a small residual between the two portal centers that grows with the separation `d`, consistent with the numerical conditioning of a larger boundary system. 
 
@@ -122,8 +123,9 @@ Both solvers force the portal pair to a common potential, as expected from the `
 
 Built with `equipotential_scene()`: two falling objects on the same background, one crossing the portal pair, the other falling freely alongside it.
 
-![Falling objects, MOM](output/final_plots/equipotential_field_mom.png)
-![Falling objects, SOR](output/final_plots/equipotential_field_sor.png)
+<img alt="Image" src="https://github.com/user-attachments/assets/7e8a4e46-02e7-4954-8a73-d45a6e557ddc" />
+
+<img width="1042" height="591" alt="Image" src="https://github.com/user-attachments/assets/da6c3862-6efb-4250-864b-c88e7d5892cd" />
 
 Both objects reach the same final speed, under both solvers, once the teleport frame itself is excluded, meaning the portal does not add or remove energy from an object crossing it.
 
@@ -131,8 +133,9 @@ Both objects reach the same final speed, under both solvers, once the teleport f
 
 Built with `falling_object_scene(solver="mom")`: a charged conductor (`q=5`, `m=0.5`) released between two portals that face each other directly, top and bottom of the domain.
 
-![Gradient magnitude, oscillating scene](output/final_plots/campo_objeto_oscilante.png)
-![Trajectory, oscillating scene](output/final_plots/trayectoria_objeto_oscilante.png)
+<img alt="Image" src="https://github.com/user-attachments/assets/f91c350f-0852-4ab8-b0b5-3d86f783a11e" />
+
+<img alt="Image" src="https://github.com/user-attachments/assets/1ee5fa00-8213-46c2-9543-9d1ad487c81d" />
 
 The coupled portals flatten the field into a wide low-gradient band between the two mouths instead of leaving a uniform gradient straight through, so the conductor falls, slows near the middle, approaches the far portal, teleports back to the top, and repeats, rather than gaining energy indefinitely. Only MOM was run for this scene.
 
@@ -140,9 +143,9 @@ The coupled portals flatten the field into a wide low-gradient band between the 
 
 Built with `capacitor_scene()` and `capacitor_scene_corrected()`: one portal sits in the gap of a two-plate capacitor, coupled to a second portal placed far away in empty space, with no other potential source nearby. `capacitor_scene_corrected()` repeats the same setup but adds a φ=0 anchor directly behind each portal.
 
-![Capacitor, raw](output/final_plots/capacitor_mom_raw.png)
-![Capacitor, corrected](output/final_plots/capacitor_mom_corrected.png)
+<img alt="Image" src="https://github.com/user-attachments/assets/64b2d968-cd27-4b4f-9f07-5cedf06859b1" />
 
+<img alt="Image" src="https://github.com/user-attachments/assets/31a39ddb-83f2-4338-8c82-e465a010281c" />
 The remote portal picks up a nonzero potential purely through the coupling, even with nothing physically near it. Adding the φ=0 anchor behind each portal concentrates that induced potential locally instead of letting it diffuse through the surrounding empty space. Only MOM was used here: separating the two portals enough to avoid boundary artifacts requires a domain too wide for SOR to converge in a reasonable number of iterations.
 
 ---
