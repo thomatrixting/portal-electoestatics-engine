@@ -25,7 +25,7 @@ Two entry points:
 
 import json
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -64,6 +64,23 @@ def _field_rgb(data: np.ndarray, scheme: str) -> np.ndarray:
         raise ValueError(f"unknown scheme {scheme!r}, expected one of {list(COLOR_SCHEMES)}")
     mapper = COLOR_SCHEMES[scheme]()
     return mapper(data)
+
+
+def _mpl_colormap_and_norm(scheme: str):
+    """Builds a matplotlib Colormap + Normalize matching a colors.py
+    GradientColorMapper's own control points exactly, so a colorbar drawn
+    with them lines up with the imshow render (which uses the mapper
+    directly, not matplotlib's colormap machinery)."""
+    if scheme not in COLOR_SCHEMES:
+        raise ValueError(f"unknown scheme {scheme!r}, expected one of {list(COLOR_SCHEMES)}")
+    mapper = COLOR_SCHEMES[scheme]()
+    vmin, vmax = float(mapper.values[0]), float(mapper.values[-1])
+    span = vmax - vmin if vmax > vmin else 1.0
+    positions = (mapper.values - vmin) / span
+    colors = mapper.colors / 255.0
+    cmap = mpl.colors.LinearSegmentedColormap.from_list(
+        f"{scheme}_mpl", list(zip(positions, colors)))
+    return cmap, mpl.colors.Normalize(vmin=vmin, vmax=vmax)
 
 
 def _draw_isolines(ax, data: np.ndarray, isoline_count: int) -> None:
@@ -137,7 +154,23 @@ def _mask_bbox(mask: np.ndarray) -> Optional[Tuple[float, float, float, float, f
     return xmin, xmax, ymin, ymax, cx, cy, w, h
 
 
-def _draw_pinned_objects(ax, data, meta, background_rgb: np.ndarray) -> None:
+def _aspect_figsize(width_units: float, height_units: float,
+                    base_width: float = 8.0,
+                    min_height: float = 3.0, max_height: float = 8.0) -> Tuple[float, float]:
+    """Figure size (inches) that keeps the plotted content close to its
+    real data aspect ratio, instead of always using a fixed (8, 6) canvas.
+    A fixed canvas leaves huge blank padding above/below very wide/short
+    data (e.g. an 800x200 capacitor scene), making the saved image look far
+    bigger than the actual content."""
+    if width_units <= 0:
+        return base_width, min_height
+    height = base_width * (height_units / width_units)
+    height = max(min_height, min(max_height, height))
+    return base_width, height
+
+
+def _draw_pinned_objects(ax, data, meta, background_rgb: np.ndarray,
+                         label_below: bool = False) -> None:
     sim_params = meta.get("sim_params", {})
     sim_width = sim_params.get("sim_width", background_rgb.shape[1])
     sim_height = sim_params.get("sim_height", background_rgb.shape[0])
@@ -168,19 +201,13 @@ def _draw_pinned_objects(ax, data, meta, background_rgb: np.ndarray) -> None:
             ax.annotate("", xy=(ex, ey), xytext=(cx, cy),
                        arrowprops=dict(arrowstyle="->", color=color, linewidth=1.5))
 
-            label_dx, label_dy = -dx, -dy
-            pad = (h / 2 if axis == "y" else w / 2) + 3
-            lx, ly = cx + label_dx * pad, cy + label_dy * pad
-            if not (margin <= lx <= sim_width - margin and margin <= ly <= sim_height - margin):
-                # opposite-of-arrow side runs off the grid (portal sits at
-                # the sim boundary) - fall back to the arrow's own side,
-                # which always has room since the arrow points inward.
-                label_dx, label_dy = dx, dy
-                lx, ly = cx + label_dx * pad, cy + label_dy * pad
-        else:
-            lx, ly = cx, cy - (h / 2 + 3)
-            if ly < margin:
-                ly = cy + (h / 2 + 3)
+        # Label sits just above the object, except a PotentialAnchor's
+        # label goes just below instead when label_below is set.
+        is_anchor = entry.get("type") == "PotentialAnchor"
+        sign = 1.0 if (label_below and is_anchor) else -1.0
+        lx, ly = cx, cy + sign * (h / 2 + 3)
+        if not margin <= ly <= sim_height - margin:
+            ly = cy - sign * (h / 2 + 3)
 
         lx = float(np.clip(lx, margin, sim_width - margin))
         ly = float(np.clip(ly, margin, sim_height - margin))
@@ -197,7 +224,9 @@ def plot_field(path, field: str = "potential", scheme: str = "Default",
               show_isolines: bool = True, isoline_count: int = 10,
               show_vectors: bool = False, vector_step: int = 10,
               title: Optional[str] = None, xlabel: Optional[str] = None,
-              save_path: Optional[str] = None):
+              save_path: Optional[str] = None,
+              x_ranges: Optional[List[Tuple[float, float]]] = None,
+              label_below: bool = False, show_colorbar: bool = False):
     """
     Plots a scalar field from a snapshot or recording export, matching the
     live simulation's rendering: real color ramp, equipotential lines,
@@ -211,7 +240,7 @@ def plot_field(path, field: str = "potential", scheme: str = "Default",
         scheme:        any key from colors.COLOR_SCHEMES (e.g. "Default",
                        "Potential", "Plasma", "Electric", "Fire", "Extra").
         ax:            existing matplotlib Axes to draw into (creates a new
-                       figure if None).
+                       figure if None). Incompatible with x_ranges.
         show:          call plt.show() when a new figure was created.
         show_isolines: draw equipotential lines (matches Simulation's
                        isoline overlay).
@@ -219,21 +248,54 @@ def plot_field(path, field: str = "potential", scheme: str = "Default",
         title:         custom plot title (defaults to an auto-generated one).
         xlabel:        custom x-axis label (defaults to "x (grid)").
         save_path:     if given, save the figure to this path.
+        x_ranges:      optional list of (x_min, x_max) grid-coordinate
+                       windows to keep visible on the x-axis, e.g.
+                       [(0, 300), (700, 800)] to skip an empty middle
+                       region - one subplot per window, sharing the y-axis,
+                       with diagonal break marks between them (broken
+                       x-axis). Requires ax=None.
+        label_below:   plot every pinned object's label just below it
+                       instead of the default just above.
+        show_colorbar: draw a colorbar next to the plot for the raw scalar
+                       value <-> color mapping. Most fields here use a
+                       fixed, known scale (e.g. potential always 0..1) so
+                       this defaults to off, but fields without a fixed
+                       range (e.g. "gradient") benefit from one.
     """
     data, meta = _load(path)
 
+    if field not in _FIELD_KEYS:
+        raise ValueError(f"unknown field {field!r}, expected one of {list(_FIELD_KEYS)}")
+    H, W = data[_FIELD_KEYS[field]].shape
+
+    if x_ranges is not None:
+        if ax is not None:
+            raise ValueError("x_ranges requires ax=None (it creates its own subplots)")
+        return _plot_field_broken_x(data, meta, field, scheme, show,
+                                    show_isolines, isoline_count,
+                                    show_vectors, vector_step,
+                                    title, xlabel, save_path, x_ranges,
+                                    label_below, H, show_colorbar)
+
     created = ax is None
     if created:
-        _, ax = plt.subplots(figsize=(8, 6))
+        _, ax = plt.subplots(figsize=_aspect_figsize(W, H))
 
     rgb = _render_background(ax, data, field, scheme,
                              show_isolines, isoline_count,
                              show_vectors, vector_step)
-    _draw_pinned_objects(ax, data, meta, rgb)
+    _draw_pinned_objects(ax, data, meta, rgb, label_below=label_below)
 
     ax.set_title(title or f"{field} ({scheme}) - {meta.get('kind', '?')} @ {meta.get('timestamp', '?')}")
     ax.set_xlabel(xlabel or "x (grid)")
     ax.set_ylabel("y (grid)")
+
+    if show_colorbar:
+        cmap, norm = _mpl_colormap_and_norm(scheme)
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="4%", pad=0.15)
+        plt.colorbar(sm, cax=cax, label=field)
 
     if save_path is not None:
         ax.figure.savefig(save_path, dpi=150, bbox_inches="tight")
@@ -243,13 +305,75 @@ def plot_field(path, field: str = "potential", scheme: str = "Default",
     return ax
 
 
+def _plot_field_broken_x(data, meta, field: str, scheme: str, show: bool,
+                         show_isolines: bool, isoline_count: int,
+                         show_vectors: bool, vector_step: int,
+                         title: Optional[str], xlabel: Optional[str],
+                         save_path: Optional[str],
+                         x_ranges: List[Tuple[float, float]],
+                         label_below: bool = False,
+                         height_units: Optional[float] = None,
+                         show_colorbar: bool = False):
+    """Same rendering as plot_field, split into one subplot per x_ranges
+    window (broken x-axis) so an uninteresting middle region can be
+    skipped without distorting the aspect ratio of the parts shown."""
+    widths = [x_max - x_min for x_min, x_max in x_ranges]
+    figsize = _aspect_figsize(sum(widths), height_units) if height_units else (8, 6)
+    fig, axes = plt.subplots(1, len(x_ranges), figsize=figsize, sharey=True,
+                             gridspec_kw={"width_ratios": widths, "wspace": 0.06})
+    axes = np.atleast_1d(axes)
+
+    for ax in axes:
+        rgb = _render_background(ax, data, field, scheme,
+                                 show_isolines, isoline_count,
+                                 show_vectors, vector_step)
+        _draw_pinned_objects(ax, data, meta, rgb, label_below=label_below)
+
+    for ax, (x_min, x_max) in zip(axes, x_ranges):
+        ax.set_xlim(x_min, x_max)
+
+    for ax in axes[1:]:
+        ax.tick_params(left=False, labelleft=False)
+        ax.spines["left"].set_visible(False)
+    for ax in axes[:-1]:
+        ax.spines["right"].set_visible(False)
+
+    d = 0.015  # diagonal break-mark size, in axes-fraction units
+    for left_ax, right_ax in zip(axes[:-1], axes[1:]):
+        kwargs = dict(transform=left_ax.transAxes, color="k", clip_on=False, linewidth=1)
+        left_ax.plot((1 - d, 1 + d), (-d, d), **kwargs)
+        left_ax.plot((1 - d, 1 + d), (1 - d, 1 + d), **kwargs)
+        kwargs["transform"] = right_ax.transAxes
+        right_ax.plot((-d, d), (-d, d), **kwargs)
+        right_ax.plot((-d, d), (1 - d, 1 + d), **kwargs)
+
+    axes[0].set_ylabel("y (grid)")
+    fig.supxlabel(xlabel or "x (grid)")
+    fig.suptitle(title or f"{field} ({scheme}) - {meta.get('kind', '?')} @ {meta.get('timestamp', '?')}")
+
+    if show_colorbar:
+        cmap, norm = _mpl_colormap_and_norm(scheme)
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        divider = make_axes_locatable(axes[-1])
+        cax = divider.append_axes("right", size="4%", pad=0.15)
+        plt.colorbar(sm, cax=cax, label=field)
+
+    if save_path is not None:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+
+    if show:
+        plt.show()
+    return axes
+
+
 def plot_trajectories(recording_path, every_n_frames: int = 5,
                       field: str = "potential", scheme: str = "Default",
                       show_isolines: bool = True, isoline_count: int = 10,
                       show_vectors: bool = False, vector_step: int = 10,
                       ax=None, show: bool = True, cmap: str = "plasma",
                       title: Optional[str] = None, xlabel: Optional[str] = None,
-                      save_path: Optional[str] = None):
+                      save_path: Optional[str] = None,
+                      label_below: bool = False):
     """
     Plots the recorded MaterialObject mask outlines and TestCharge positions
     sampled every `every_n_frames` frames, colored by a hue gradient that
@@ -269,19 +393,25 @@ def plot_trajectories(recording_path, every_n_frames: int = 5,
         title:           custom plot title (defaults to an auto-generated one).
         xlabel:          custom x-axis label (defaults to "x (grid)").
         save_path:       if given, save the figure to this path.
+        label_below:     plot every pinned object's label just below it
+                         instead of the default just above.
     """
     data, meta = _load(recording_path)
     if meta.get("kind") != "recording":
         raise ValueError("plot_trajectories expects a recording_*.npz/.json file")
 
+    if field not in _FIELD_KEYS:
+        raise ValueError(f"unknown field {field!r}, expected one of {list(_FIELD_KEYS)}")
+    H, W = data[_FIELD_KEYS[field]].shape
+
     created = ax is None
     if created:
-        _, ax = plt.subplots(figsize=(8, 6))
+        _, ax = plt.subplots(figsize=_aspect_figsize(W, H))
 
     rgb = _render_background(ax, data, field, scheme,
                              show_isolines, isoline_count,
                              show_vectors, vector_step)
-    _draw_pinned_objects(ax, data, meta, rgb)
+    _draw_pinned_objects(ax, data, meta, rgb, label_below=label_below)
 
     frame_count = meta["frame_count"]
     stride = max(1, every_n_frames)
@@ -616,7 +746,8 @@ def plot_oscillating_object_field(show: bool = True):
     ax = plot_field(base / "snapshot_mom_oscilationg.npz", show=show,
                     scheme="Extra", show_isolines=False, show_vectors=True, field="gradient",
                     title="Gradiente del campo - objeto oscilante (MOM)",
-                    save_path=str(_FINAL_PLOTS_DIR / "campo_objeto_oscilante.png"))
+                    save_path=str(_FINAL_PLOTS_DIR / "campo_objeto_oscilante.png"),
+                    show_colorbar=True)
     return ax
 
 
@@ -630,6 +761,17 @@ def plot_oscillating_object_trajectory(show: bool = True):
                            save_path=str(_FINAL_PLOTS_DIR / "trayectoria_objeto_oscilante.png"),
                            show=show)
     return ax
+
+def plot_capacitor(show = True):
+    base = Path("/mnt/ubuntu/home/thomas/Desktop/portals/portal-gravity-engine/output/capacitor")
+    plot_field(base/"snapshot_capacitor_MOM.npz",scheme="Extra", show_isolines=True, show_vectors=False, field="potential",
+                        title="Campo equipotencial para un capacitor (MOM)",
+                        save_path=str(_FINAL_PLOTS_DIR / "capacitor_mom_raw.png"),isoline_count=20,
+                        x_ranges=[(0, 275), (600, 775)])
+    plot_field(base/"snapshot_capacitor_MOM_corrected.npz",scheme="Extra", show_isolines=True, show_vectors=False, field="potential",
+                        title="Campo equipotencial corregido para un capacitor (MOM)",
+                        save_path=str(_FINAL_PLOTS_DIR / "capacitor_mom_corrected.png"),isoline_count=20,
+                        x_ranges=[(0, 275), (600, 775)],label_below=True)
 
 
 def plot_equipotencial_scene(show = True):
@@ -660,12 +802,13 @@ def plot_equipotencial_scene(show = True):
     # plot_velocities(recording_path, show=False,components=["speed"],every_n_frames=50, title="Velocities of tracked objects MOM", save_path=str(safe_path.with_name("velocities_mom.png")))
 
     # Graficas finales (final_plots) - unicas que se muestran (show=True)
-    plot_close_portals_scene(show=show)
-    plot_equipotencial_field_mom(show=show)
-    plot_equipotencial_field_sor(show=show)
-    plot_velocities_comparison(show=show)
+    #plot_close_portals_scene(show=show)
+    #plot_equipotencial_field_mom(show=show)
+    #plot_equipotencial_field_sor(show=show)
+    #plot_velocities_comparison(show=show)
     plot_oscillating_object_field(show=show)
-    plot_oscillating_object_trajectory(show=show)
+    #plot_oscillating_object_trajectory(show=show)
+    plot_capacitor(show=show)
 
 def _flux_from_mask(mask: np.ndarray, grad_x: np.ndarray, grad_y: np.ndarray,
                      portals_mask: np.ndarray) -> float:

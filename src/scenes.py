@@ -32,9 +32,50 @@ def _null_anchors(sim_width, sim_height):
 
 #scenes
 
+def capacitor_scene_corrected() -> Simulation:
+    """one paralel portals between a capacitor that would be the roof, to another portal far away from the other portal"""
+    W,H = 800,200
+    px_sclae = 2
+
+    cap_length = H/2
+    portal_lenght= H/4
+
+    cap_delta_with_top = (H - cap_length)/2
+    portal_delta_with_top = (H - portal_lenght)/2
+
+
+    #define the capacitor
+    capacitor = [
+        PotentialAnchor(RectangleMask(W/8,W/8,cap_delta_with_top,cap_delta_with_top + cap_length),1.0,),
+        PotentialAnchor(RectangleMask(W/4,W/4,cap_delta_with_top,cap_delta_with_top + cap_length),0)
+    ]
+
+    p1 = Portal(RectangleMask(3*W/16, 3*W/16, portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(255, 153, 0),facing_positive=False,back_depth=10)
+    p2 = Portal(RectangleMask(int(W*0.9), int(W*0.9), portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(0, 204, 255),facing_positive=False, back_depth=10)
+
+    #define potencial anchors behind the portals
+    anchors = [
+        PotentialAnchor(RectangleMask(3*W/16+1, 3*W/16+1, portal_delta_with_top, portal_delta_with_top + portal_lenght),0),
+        #PotentialAnchor(RectangleMask(int(W*0.9)+1, int(W*0.9)+1, portal_delta_with_top, portal_delta_with_top + portal_lenght),0)
+    ]
+
+
+    return Simulation(
+        *capacitor, *anchors, CouplePortal(p1,p2),
+        sim_width=W, sim_height=H,
+        px_scale=px_sclae,
+        iterations_per_frame=2000,
+        isoline_count=20,
+        solver_mode="mom",
+        show_vectors=True,
+        show_isolines=True,
+        
+        color_mapper=extra_mapper()
+    )
+
 def capacitor_scene() -> Simulation:
     """one paralel portals between a capacitor that would be the roof, to another portal far away from the other portal"""
-    W,H = 400,200
+    W,H = 800,200
     px_sclae = 2
 
     cap_length = H/2
@@ -46,19 +87,94 @@ def capacitor_scene() -> Simulation:
     #define the capacitor
     capacitor = [
         PotentialAnchor(RectangleMask(W/8,W/8,cap_delta_with_top,cap_delta_with_top + cap_length),1.0,),
-        PotentialAnchor(RectangleMask(3*W/8,W/8,cap_delta_with_top,cap_delta_with_top + cap_length),0)
+        PotentialAnchor(RectangleMask(2*W/8,2*W/8,cap_delta_with_top,cap_delta_with_top + cap_length),0)
     ]
 
-    p1 = Portal(RectangleMask(W/4, W/4, portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(255, 153, 0),facing_positive=False)
-    p2 = Portal(RectangleMask(3*W/4, 3*W/4, portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(0, 204, 255),facing_positive=False)
+    p1 = Portal(RectangleMask(3*W/16, 3*W/16, portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(255, 153, 0),facing_positive=False,back_depth=10)
+    p2 = Portal(RectangleMask(int(W*0.9), int(W*0.9), portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(0, 204, 255),facing_positive=True, back_depth=10)
 
     return Simulation(
         *capacitor, CouplePortal(p1,p2),
         sim_width=W, sim_height=H,
         px_scale=px_sclae,
         iterations_per_frame=2000,
-        isoline_count=50,
-        solver_mode="mom"
+        isoline_count=20,
+        solver_mode="mom",
+        show_vectors=True,
+        show_isolines=True,
+        
+        color_mapper=extra_mapper()
+    )
+
+
+def capacitor_scene_mom_box_dirichlet() -> Simulation:
+    """Same layout as capacitor_scene, but solved with MOM inside a full
+    Dirichlet box (image_walls_y on top of the existing side image_walls),
+    to test the new mom_images_y flag."""
+    W,H = 800,200
+    px_sclae = 2
+
+    cap_length = H/2
+    portal_lenght= H/4
+
+    cap_delta_with_top = (H - cap_length)/2
+    portal_delta_with_top = (H - portal_lenght)/2
+
+    capacitor = [
+        PotentialAnchor(RectangleMask(W/8,W/8,cap_delta_with_top,cap_delta_with_top + cap_length),1.0,),
+        PotentialAnchor(RectangleMask(2*W/8,2*W/8,cap_delta_with_top,cap_delta_with_top + cap_length),0)
+    ]
+
+    p1 = Portal(RectangleMask(3*W/16, 3*W/16, portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(255, 153, 0),facing_positive=False,back_depth=10)
+    p2 = Portal(RectangleMask(int(W*0.9), int(W*0.9), portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(0, 204, 255),facing_positive=True, back_depth=10)
+
+    return Simulation(
+        *capacitor, CouplePortal(p1,p2),
+        sim_width=W, sim_height=H,
+        px_scale=px_sclae,
+        iterations_per_frame=2000,
+        isoline_count=20,
+        solver_mode="mom",
+        show_vectors=True,
+        show_isolines=True,
+        mom_images=True,
+        mom_images_y=True,
+        color_mapper=extra_mapper()
+    )
+
+
+def capacitor_scene_sor_box_dirichlet() -> Simulation:
+    """Same layout as capacitor_scene, but solved with SOR inside a box
+    whose top/bottom walls are pinned to phi=0 (sor_dirichlet_top_bottom),
+    to test the new flag."""
+    W,H = 400,200
+    px_sclae = 2
+
+    cap_length = H/2
+    portal_lenght= H/4
+
+    cap_delta_with_top = (H - cap_length)/2
+    portal_delta_with_top = (H - portal_lenght)/2
+
+    capacitor = [
+        PotentialAnchor(RectangleMask(W/8,W/8,cap_delta_with_top,cap_delta_with_top + cap_length),1.0,),
+        PotentialAnchor(RectangleMask(2*W/8,2*W/8,cap_delta_with_top,cap_delta_with_top + cap_length),0)
+    ]
+
+    p1 = Portal(RectangleMask(3*W/16, 3*W/16, portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(255, 153, 0),facing_positive=False,back_depth=10)
+    p2 = Portal(RectangleMask(int(W*0.9), int(W*0.9), portal_delta_with_top, portal_delta_with_top + portal_lenght), color=(0, 204, 255),facing_positive=True, back_depth=10)
+
+    return Simulation(
+        *capacitor, CouplePortal(p1,p2),
+        sim_width=W, sim_height=H,
+        px_scale=px_sclae,
+        iterations_per_frame=2000,
+        isoline_count=20,
+        solver_mode="sor",
+        show_vectors=True,
+        show_isolines=True,
+        sor_dirichlet_top_bottom=True,
+        color_mapper=extra_mapper()
     )
 
 

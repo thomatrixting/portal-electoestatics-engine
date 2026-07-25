@@ -107,6 +107,44 @@ Controls convergence speed:
 ---
 ## Results
 
+A few of the predefined scenes in `scenes.py` were used to check that the portal implementation actually behaves the way the underlying axioms require. Full derivations and figures are in `explanation/report.pdf`; this section is just a quick pointer to what each scene checks and what came out of it.
+
+### Equipotenciales: do coupled portals really reach the same potential?
+
+Built with `close_portals_scene(solver=..., distance_portals=...)`, sweeping the vertical separation between two facing portals (`d = 0, 40, 80, 120`) on a uniform background field (top anchor φ=1, bottom φ=0).
+
+![MOM field by distance](output/final_plots/campo_por_distancia_mom.png)
+![SOR field by distance](output/final_plots/campo_por_distancia_sor.png)
+
+Both solvers force the portal pair to a common potential, as expected from the `CouplePortal` coupling. SOR matches to full precision; MOM leaves a small residual between the two portal centers that grows with the separation `d`, consistent with the numerical conditioning of a larger boundary system. A secondary check with a test charge (`axiom_continuity_sor()` / `axiom_continuity_mom()`) confirmed the induced field stays essentially aligned with the coupling axis under SOR, with a small transverse component under MOM.
+
+### Conservación de la velocidad al atravesar un portal
+
+Built with `equipotential_scene()`: two falling objects on the same background, one crossing the portal pair, the other falling freely alongside it.
+
+![Falling objects, MOM](output/final_plots/equipotential_field_mom.png)
+![Falling objects, SOR](output/final_plots/equipotential_field_sor.png)
+
+Both objects reach the same final speed, under both solvers, once the teleport frame itself is excluded, meaning the portal does not add or remove energy from an object crossing it.
+
+### Objeto oscilante entre portales
+
+Built with `falling_object_scene(solver="mom")`: a charged conductor (`q=5`, `m=0.5`) released between two portals that face each other directly, top and bottom of the domain.
+
+![Gradient magnitude, oscillating scene](output/final_plots/campo_objeto_oscilante.png)
+![Trajectory, oscillating scene](output/final_plots/trayectoria_objeto_oscilante.png)
+
+The coupled portals flatten the field into a wide low-gradient band between the two mouths instead of leaving a uniform gradient straight through, so the conductor falls, slows near the middle, approaches the far portal, teleports back to the top, and repeats, rather than gaining energy indefinitely. Only MOM was run for this scene.
+
+### Discontinuidad del campo a través de los portales
+
+Built with `capacitor_scene()` and `capacitor_scene_corrected()`: one portal sits in the gap of a two-plate capacitor, coupled to a second portal placed far away in empty space, with no other potential source nearby. `capacitor_scene_corrected()` repeats the same setup but adds a φ=0 anchor directly behind each portal.
+
+![Capacitor, raw](output/final_plots/capacitor_mom_raw.png)
+![Capacitor, corrected](output/final_plots/capacitor_mom_corrected.png)
+
+The remote portal picks up a nonzero potential purely through the coupling, even with nothing physically near it. Adding the φ=0 anchor behind each portal concentrates that induced potential locally instead of letting it diffuse through the surrounding empty space. Only MOM was used here: separating the two portals enough to avoid boundary artifacts requires a domain too wide for SOR to converge in a reasonable number of iterations.
+
 ---
 ## Project Architecture
 

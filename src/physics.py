@@ -22,12 +22,14 @@ class PhysicsEngine:
     def __init__(self, width: int, height: int,
                  field: list, sor_omega: float = 1.7,
                 default_grad=(0.0, 0.0),
-                ignore_material_objects: bool = True) -> None:
+                ignore_material_objects: bool = True,
+                dirichlet_top_bottom: bool = False) -> None:
         self.width = width
         self.height = height
         self.field = field
         self.sor_omega = sor_omega
         self._ignore_material_objects = ignore_material_objects
+        self.dirichlet_top_bottom = dirichlet_top_bottom
         self.Y, self.X = np.ogrid[:height, :width]
 
         # Pre-apply the potential gradient (from 1.0 to 0.0). Since this isn't compatible with some scenes,
@@ -157,6 +159,10 @@ class PhysicsEngine:
         # dirichelet sides
         #p[:, 0] = np.zeros(self.height)
         #p[:, -1] = np.zeros(self.height)
+
+        if self.dirichlet_top_bottom:
+            p[0, :] = 0.0
+            p[-1, :] = 0.0
 
         # CouplePortal
         for _, m1, m2 in self._active_couples_cache:

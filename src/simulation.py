@@ -34,6 +34,8 @@ class Simulation:
                  px_scale: float,
                  solver_mode: str = "sor",
                  mom_images: bool = False,
+                 mom_images_y: bool = False,
+                 sor_dirichlet_top_bottom: bool = False,
                  iterations_per_frame: int = 50,
                  diff_threshold: float = 1e-4,
                  view_mode: str = "potential",
@@ -81,9 +83,12 @@ class Simulation:
 
         self.solver_mode = solver_mode
         self.mom_images = mom_images
+        self.mom_images_y = mom_images_y
+        self.sor_dirichlet_top_bottom = sor_dirichlet_top_bottom
 
         self._engine = PhysicsEngine(
-            sim_width, sim_height, self.field, sor_omega=self.sor_omega)
+            sim_width, sim_height, self.field, sor_omega=self.sor_omega,
+            dirichlet_top_bottom=self.sor_dirichlet_top_bottom)
         self.potential = self._engine.potential
         self.grad_x = self._engine.grad_x
         self.grad_y = self._engine.grad_y
@@ -155,6 +160,7 @@ class Simulation:
         solver = MOMSolver2D(
             meshes, coupled_pairs,
             image_walls=(0, W) if self.mom_images else None,
+            image_walls_y=(0, H) if self.mom_images_y else None,
         )
         solver.build_and_solve()
 
@@ -723,6 +729,8 @@ class Simulation:
             "px_scale": self.px_scale,
             "solver_mode": self.solver_mode,
             "mom_images": self.mom_images,
+            "mom_images_y": self.mom_images_y,
+            "sor_dirichlet_top_bottom": self.sor_dirichlet_top_bottom,
             "sor_omega": self.sor_omega,
             "iterations_per_frame": self.iterations_per_frame,
             "diff_threshold": self.diff_threshold,
