@@ -1130,9 +1130,6 @@ class Simulation:
         w.append(Button(0, 0, 0, 24, "+ Cube",
                         callback=lambda: self._add_material("Cube",
                             RectangleMask, (180, 180, 180))))
-        w.append(Button(0, 0, 0, 24, "+ Planet",
-                        callback=lambda: self._add_material("Planet",
-                            CircleMask, (140, 90, 60))))
         w.append(Button(0, 0, 0, 24, "+ Test Charge",
                         callback=self._add_test_charge))
         w.append(Divider(0, 0, 0))
