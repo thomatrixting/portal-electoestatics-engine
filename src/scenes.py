@@ -35,7 +35,7 @@ def _null_anchors(sim_width, sim_height):
 def capacitor_scene() -> Simulation:
     """one paralel portals between a capacitor that would be the roof, to another portal far away from the other portal"""
     W,H = 400,200
-    px_sclae = 3
+    px_sclae = 2
 
     cap_length = H/2
     portal_lenght= H/4
@@ -57,7 +57,6 @@ def capacitor_scene() -> Simulation:
         sim_width=W, sim_height=H,
         px_scale=px_sclae,
         iterations_per_frame=2000,
-        sor_omega=1.7,
         isoline_count=50,
         solver_mode="mom"
     )

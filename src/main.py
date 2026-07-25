@@ -37,7 +37,8 @@ def equipotencials_closeportals_falling():
     #sim = close_portals_scene(solver='mom', distance_portals=0)
     #sim = falling_object_scene(solver='sor',pinned=True)
     #sim = falling_object_scene(solver='mom',pinned=True)
-    sim = falling_object_scene(solver='sor',pinned=True)
+    #sim = falling_object_scene(solver='sor',pinned=True)
+    sim = capacitor_scene()
     sim.run()
 
 
